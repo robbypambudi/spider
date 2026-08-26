@@ -1,0 +1,2 @@
+name: {{ include "spider.name" . }}
+failMode: {{ .Values.failMode }}

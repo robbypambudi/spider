@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spider-api
+  labels:
+    app: spider
+    component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spider
+      component: api
+  template:
+    metadata:
+      labels:
+        app: spider
+        component: api
+    spec:
+      containers:
+        - name: api
+          image: spider-api:0.1.0
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql+asyncpg://spider:spider@postgres:5432/spider
+            - name: SPIDER_FAIL_MODE
+              value: closed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spider-api
+spec:
+  selector:
+    app: spider
+    component: api
+  ports:
+    - port: 8000
+      targetPort: 8000

@@ -1,0 +1,27 @@
+{
+  "title": "SPIDER Security Runtime",
+  "uid": "spider-security",
+  "schemaVersion": 39,
+  "tags": ["spider", "security"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Blocked",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "spider_security_blocked_total" }]
+    },
+    {
+      "type": "stat",
+      "title": "Allowed",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "spider_security_allowed_total" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Pipeline latency",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "rate(spider_security_pipeline_latency_seconds_sum[5m])" }]
+    }
+  ]
+}

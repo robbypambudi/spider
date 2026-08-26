@@ -1,0 +1,21 @@
+experiment:
+  name: baseline-low-fpr
+
+dataset:
+  path: experiments/datasets/test.jsonl
+
+security:
+  detector: rule-based
+  chunker:
+    type: fixed
+    size: 2048
+  threshold: 0.99
+  policy:
+    action_on_detection: block
+
+metrics:
+  target_fpr:
+    - 0.0005
+    - 0.001
+    - 0.005
+    - 0.01

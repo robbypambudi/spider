@@ -1,0 +1,7 @@
+replicaCount: 1
+image:
+  repository: spider-api
+  tag: "0.1.0"
+failMode: closed
+defaultDetector: rule-based
+defaultThreshold: 0.5

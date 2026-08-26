@@ -1,0 +1,5 @@
+"""Detector catalog lives under GET /api/v1/security/detectors."""
+
+from internal.handler.security.routes import router
+
+__all__ = ["router"]

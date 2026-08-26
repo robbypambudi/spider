@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: spider
+      POSTGRES_PASSWORD: spider
+      POSTGRES_DB: spider
+    ports:
+      - "5432:5432"
+    volumes:
+      - spider-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spider -d spider"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.api
+    environment:
+      SPIDER_ENV: development
+      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      REDIS_URL: redis://redis:6379/0
+      SPIDER_JWT_SECRET: change-me
+      SPIDER_WORKER_TOKEN: development-worker-token
+      SPIDER_CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      SPIDER_DEFAULT_DETECTOR: rule-based
+      SPIDER_DEFAULT_THRESHOLD: "0.5"
+      SPIDER_FAIL_MODE: closed
+      SPIDER_LOG_PROMPT_CONTENT: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  controller:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.api
+    command: ["uv", "run", "python", "-m", "cmd.controller.main"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      REDIS_URL: redis://redis:6379/0
+      SPIDER_WORKER_OFFLINE_TIMEOUT: "30"
+    depends_on:
+      api:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.api
+    command: ["uv", "run", "python", "-m", "cmd.worker.main"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      SPIDER_API_BASE_URL: http://api:8000
+      SPIDER_WORKER_TOKEN: development-worker-token
+      SPIDER_DEFAULT_MODEL: mock-llm
+      SPIDER_WORKER_ID: local-mock-worker
+    depends_on:
+      api:
+        condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: spider
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./deployments/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deployments/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  spider-pg:
