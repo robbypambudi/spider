@@ -20,6 +20,16 @@ htmlcov/
 *.db
 *.sqlite3
 
+# Go
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.test
+*.out
+backend/bin/
+.spider-worker-id
+
 # Node
 node_modules/
 frontend/dist/
