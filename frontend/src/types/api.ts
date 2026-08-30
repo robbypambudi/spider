@@ -89,9 +89,19 @@ export interface WorkerView {
       memory_total_mb: number;
       memory_used_mb: number;
       utilization: number;
-    }>;
+    }> | null;
   };
   models: Array<{ name: string; status: string }>;
+}
+
+export interface PromptShieldModel {
+  id: string;
+  name: string;
+  params: string;
+  description?: string;
+  active?: boolean;
+  status?: string;
+  worker_id?: string | null;
 }
 
 export interface InferenceResponse {

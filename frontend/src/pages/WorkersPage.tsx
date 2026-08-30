@@ -26,7 +26,7 @@ export function WorkersPage() {
           </thead>
           <tbody>
             {(data ?? []).map((worker) => {
-              const gpu = worker.resources.gpus[0];
+              const gpu = (worker.resources.gpus ?? [])[0];
               return (
                 <tr key={worker.worker_id} className="border-b border-line transition hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono">

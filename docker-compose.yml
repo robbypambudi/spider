@@ -53,7 +53,7 @@ services:
       SPIDER_JWT_SECRET: change-me
       SPIDER_WORKER_TOKEN: development-worker-token
       SPIDER_CORS_ORIGINS: http://localhost:5173,http://localhost:3000
-      SPIDER_DEFAULT_DETECTOR: prompt-shield
+      SPIDER_DEFAULT_DETECTOR: prompt-shield+rules
       SPIDER_PROMPT_SHIELD_ENDPOINT: http://prompt-shield:8081
       SPIDER_PROMPT_SHIELD_MODEL: robbypambudi/prompt-shield-flan-t5-small
       SPIDER_DEFAULT_THRESHOLD: "0.5"
@@ -99,7 +99,8 @@ services:
       DATABASE_URL: postgres://spider:spider@postgres:5432/spider?sslmode=disable
       SPIDER_API_BASE_URL: http://api:8000
       SPIDER_WORKER_TOKEN: development-worker-token
-      SPIDER_DEFAULT_MODEL: mock-llm
+      SPIDER_DEFAULT_MODEL: robbypambudi/prompt-shield-flan-t5-small
+      SPIDER_SERVING_PROVIDER: prompt-shield
       SPIDER_WORKER_ID: local-mock-worker
     depends_on:
       api:

@@ -250,9 +250,16 @@ func (r *WorkerRepo) AsResource(ctx context.Context, w *WorkerRow) (apis.WorkerR
 	return apis.WorkerResource{
 		WorkerID: w.WorkerID, Hostname: w.Hostname, Site: w.Site, Version: w.Version,
 		Status: w.Status,
-		Resources: apis.WorkerResources{CPUTotal: w.CPUTotal, MemoryTotalMB: w.MemoryTotalMB, GPUs: gpus},
+		Resources: apis.WorkerResources{CPUTotal: w.CPUTotal, MemoryTotalMB: w.MemoryTotalMB, GPUs: normalizeGPUs(gpus)},
 		Models: models, RunningRequests: w.RunningRequests, Metadata: meta,
 	}, nil
+}
+
+func normalizeGPUs(gpus []apis.GPUResource) []apis.GPUResource {
+	if gpus == nil {
+		return []apis.GPUResource{}
+	}
+	return gpus
 }
 
 func (r *WorkerRepo) ListResources(ctx context.Context) ([]apis.WorkerResource, error) {

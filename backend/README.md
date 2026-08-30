@@ -45,7 +45,9 @@ For development without GPU/model download, use `SPIDER_DEFAULT_DETECTOR=rule-ba
 | `go run ./cmd/api` | HTTP control plane (:8000) |
 | `go run ./cmd/controller` | Worker reconciliation loop |
 | `go run ./cmd/worker` | Cluster worker agent |
-| `go run ./cmd/cli` | CLI client |
+| `go run ./cmd/spider` | CLI client (`spider security ...`, `spider worker ...`) |
+
+Run `go install ./cmd/spider` to put a `spider` binary on your `PATH` (into `$(go env GOBIN)`, or `$(go env GOPATH)/bin` if `GOBIN` is unset) so it can be called directly instead of via `go run`/`./spider.exe`.
 
 ## Tests
 

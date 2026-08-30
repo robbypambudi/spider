@@ -38,18 +38,6 @@ func (s *PolicyService) ListPolicies(ctx context.Context) ([]map[string]interfac
 	return append(out, prepared...), nil
 }
 
-type ServingService struct {
-	Workers *store.WorkerRepo
-}
-
-func (s *ServingService) ListNodes(ctx context.Context) ([]map[string]interface{}, error) {
-	return s.Workers.ListServingNodes(ctx)
-}
-
-func (s *ServingService) ListModels(ctx context.Context) ([]map[string]interface{}, error) {
-	return s.Workers.ListModels(ctx)
-}
-
 type MetricsService struct {
 	Scans    *store.SecurityRepo
 	Workers  *store.WorkerRepo

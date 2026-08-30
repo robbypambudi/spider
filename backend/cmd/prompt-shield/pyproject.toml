@@ -6,5 +6,15 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "torch>=2.4.0",
-    "transformers>=4.46.0",
+    "transformers>=5.15.0,<5.17",
 ]
+
+# CPU-only PyTorch — avoids ~2GB NVIDIA CUDA wheels (cublas, cudnn, triton, …).
+# Flan-T5-small/base run fine on CPU for thesis/demo workloads.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }

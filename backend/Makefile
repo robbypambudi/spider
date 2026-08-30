@@ -1,6 +1,6 @@
 .PHONY: build test migrate sqlc tidy
 
-BINARIES := spider-api spider-controller spider-worker spider-cli
+BINARIES := spider-api spider-controller spider-worker spider
 
 build: $(BINARIES)
 
@@ -13,8 +13,11 @@ spider-controller:
 spider-worker:
 	go build -o bin/spider-worker ./cmd/worker
 
-spider-cli:
-	go build -o bin/spider-cli ./cmd/cli
+spider:
+	go build -o bin/spider ./cmd/spider
+
+install-cli:
+	go install ./cmd/spider
 
 test:
 	go test -p 1 -timeout 60s ./...

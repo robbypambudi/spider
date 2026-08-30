@@ -30,7 +30,7 @@ type Container struct {
 	Pipeline *pipeline.Pipeline
 	Enforcer *enforcement.Enforcer
 	Router   *router.ServingRouter
-	Provider *providers.MockLLMProvider
+	Provider providers.LLMProvider
 	Metrics  *telemetry.Metrics
 
 	Auth       *service.AuthService
@@ -42,8 +42,18 @@ type Container struct {
 	MetricsSvc *service.MetricsService
 }
 
+func buildProvider(settings *config.Settings) providers.LLMProvider {
+	switch settings.ServingProvider {
+	case "mock":
+		return providers.NewMockLLMProvider()
+	default:
+		return providers.NewPromptShieldProvider(settings.PromptShieldEndpoint, settings.PromptShieldModel)
+	}
+}
+
 func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 	detectors.RegisterPromptShield(settings.PromptShieldEndpoint, settings.PromptShieldModel)
+	detectors.RegisterPromptShieldEnsemble(settings.PromptShieldEndpoint, settings.PromptShieldModel)
 
 	pipe, err := pipeline.BuildDefault(pipeline.BuildOptions{
 		DetectorName: settings.DefaultDetector,
@@ -56,7 +66,11 @@ func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 		return nil, fmt.Errorf("build pipeline: %w", err)
 	}
 
-	provider := providers.NewMockLLMProvider()
+	provider := buildProvider(settings)
+	var shieldProvider *providers.PromptShieldProvider
+	if ps, ok := provider.(*providers.PromptShieldProvider); ok {
+		shieldProvider = ps
+	}
 	servingRouter := router.New(provider, nil)
 	metrics := telemetry.NewMetrics()
 
@@ -85,7 +99,9 @@ func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 		Auth: authSvc, Security: secSvc, Inference: infSvc,
 		Worker: &service.WorkerService{Workers: workers, Token: settings.WorkerToken},
 		Policy: &service.PolicyService{Policies: policies, Settings: settings},
-		Serving: &service.ServingService{Workers: workers},
+		Serving: &service.ServingService{
+			Workers: workers, Settings: settings, Pipeline: pipe, Provider: shieldProvider,
+		},
 		MetricsSvc: &service.MetricsService{Scans: scans, Workers: workers, Infer: inferences},
 	}, nil
 }

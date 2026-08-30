@@ -41,6 +41,8 @@ func MountAPI(r chi.Router, c *app.Container) {
 
 	r.With(authMW).Get("/serving/nodes", servingNodesHandler(c))
 	r.With(authMW).Get("/serving/models", servingModelsHandler(c))
+	r.With(authMW).Get("/serving/catalog", servingCatalogHandler(c))
+	r.With(authMW).Post("/serving/models/activate", activateModelHandler(c))
 	r.With(authMW).Get("/metrics/summary", metricsSummaryHandler(c))
 	r.With(authMW).Get("/jobs", jobsHandler())
 }
@@ -371,6 +373,30 @@ func servingModelsHandler(c *app.Container) http.HandlerFunc {
 			return
 		}
 		WriteJSON(w, http.StatusOK, items)
+	}
+}
+
+func servingCatalogHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		WriteJSON(w, http.StatusOK, c.Serving.Catalog())
+	}
+}
+
+func activateModelHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := decodeJSON(r, &body); err != nil || body.Model == "" {
+			WriteError(w, spidererrors.Validation("model is required"))
+			return
+		}
+		result, err := c.Serving.ActivateModel(r.Context(), body.Model)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, result)
 	}
 }
 

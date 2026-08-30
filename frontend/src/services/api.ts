@@ -1,6 +1,7 @@
 import type {
   InferenceResponse,
   MetricsSummary,
+  PromptShieldModel,
   ScanDetail,
   ScanListItem,
   ScanResponse,
@@ -69,5 +70,11 @@ export const api = {
   workers: () => request<WorkerView[]>("/api/v1/workers"),
   worker: (id: string) => request<WorkerView>(`/api/v1/workers/${id}`),
   servingNodes: () => request<Array<Record<string, unknown>>>("/api/v1/serving/nodes"),
-  servingModels: () => request<Array<Record<string, unknown>>>("/api/v1/serving/models"),
+  servingModels: () => request<PromptShieldModel[]>("/api/v1/serving/models"),
+  servingCatalog: () => request<PromptShieldModel[]>("/api/v1/serving/catalog"),
+  activateModel: (model: string) =>
+    request<{ active_model: string; message: string }>("/api/v1/serving/models/activate", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+    }),
 };

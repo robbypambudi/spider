@@ -24,6 +24,19 @@ DEFAULT_MODEL = os.getenv(
     "SPIDER_PROMPT_SHIELD_MODEL",
     "robbypambudi/prompt-shield-flan-t5-small",
 )
+
+CATALOG = [
+    {
+        "id": "robbypambudi/prompt-shield-flan-t5-small",
+        "name": "Prompt-Shield Flan-T5 Small",
+        "params": "60.8M",
+    },
+    {
+        "id": "robbypambudi/prompt-shield-flan-t5-base",
+        "name": "Prompt-Shield Flan-T5 Base",
+        "params": "0.2B",
+    },
+]
 MAX_LENGTH = int(os.getenv("SPIDER_PROMPT_SHIELD_MAX_LENGTH", "512"))
 
 app = FastAPI(title="Prompt-Shield Detector", version="0.1.0")
@@ -43,6 +56,8 @@ class DetectResponse(BaseModel):
     is_injection: bool
     latency_ms: float
     model: str
+    label_probs: dict[str, float] | None = None
+    logits: list[float] | None = None
 
 
 def load_model(model_id: str) -> None:
@@ -65,6 +80,15 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "model": _loaded_model_id}
 
 
+@app.get("/models")
+async def models() -> dict[str, object]:
+    return {
+        "active": _loaded_model_id or DEFAULT_MODEL,
+        "catalog": CATALOG,
+        "collection": "https://huggingface.co/collections/robbypambudi/prompt-shield",
+    }
+
+
 @app.post("/detect", response_model=DetectResponse)
 async def detect(body: DetectRequest) -> DetectResponse:
     model_id = body.model or DEFAULT_MODEL
@@ -78,9 +102,11 @@ async def detect(body: DetectRequest) -> DetectResponse:
         max_length=MAX_LENGTH,
     )
     with torch.no_grad():
-        logits = _model(**enc).logits
-        probs = torch.softmax(logits, dim=-1)[0]
-        p_injection = float(probs[1].item())
+        logits = _model(**enc).logits[0]
+        probs = torch.softmax(logits, dim=-1)
+        id2label = getattr(_model.config, "id2label", {0: "BENIGN", 1: "INJECTION"})
+        label_probs = {id2label[i]: float(probs[i].item()) for i in range(len(probs))}
+        p_injection = float(label_probs.get("INJECTION", float(probs[1].item())))
 
     latency_ms = (time.perf_counter() - started) * 1000.0
     return DetectResponse(
@@ -88,6 +114,8 @@ async def detect(body: DetectRequest) -> DetectResponse:
         is_injection=p_injection >= 0.5,
         latency_ms=latency_ms,
         model=model_id,
+        label_probs=label_probs,
+        logits=[float(x) for x in logits.tolist()],
     )
 
 

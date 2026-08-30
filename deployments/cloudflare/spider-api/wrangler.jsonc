@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spider-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "SPIDER_ENV": "production",
+    "SPIDER_FAIL_MODE": "closed",
+    "SPIDER_DEFAULT_DETECTOR": "rule-based",
+    "SPIDER_DEFAULT_THRESHOLD": "0.5",
+    "SPIDER_LOG_PROMPT_CONTENT": "false",
+    "SPIDER_PERSIST_PROMPT_CONTENT": "false",
+    "SPIDER_CORS_ORIGINS": "https://spider-ui.pages.dev",
+    "SPIDER_PROMPT_SHIELD_ENDPOINT": "",
+    "SPIDER_PROMPT_SHIELD_MODEL": "robbypambudi/prompt-shield-flan-t5-small"
+  },
+  "containers": [
+    {
+      "class_name": "SpiderAPI",
+      "image": "../../../deployments/docker/Dockerfile.api",
+      "image_build_context": "../../..",
+      "instance_type": "basic",
+      "max_instances": 3
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "SpiderAPI",
+        "name": "SPIDER_API"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["SpiderAPI"],
+      "tag": "v1"
+    }
+  ]
+}

@@ -33,11 +33,11 @@ export function WorkerDetailPage() {
       </Card>
       <Card>
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">GPUs</h2>
-        {data.resources.gpus.length === 0 ? (
+        {(data.resources.gpus ?? []).length === 0 ? (
           <p className="text-sm text-slate-500">CPU-only worker. GPU hardware is optional.</p>
         ) : (
           <ul className="space-y-2 font-mono text-sm text-slate-700">
-            {data.resources.gpus.map((gpu) => (
+            {(data.resources.gpus ?? []).map((gpu) => (
               <li key={gpu.index}>
                 [{gpu.index}] {gpu.name} {gpu.memory_used_mb}/{gpu.memory_total_mb}MB util={gpu.utilization}%
               </li>

@@ -111,7 +111,7 @@ func (s *InferenceService) Infer(ctx context.Context, request apis.InferenceRequ
 	if err != nil {
 		return apis.ProtectedInferenceResponse{}, err
 	}
-	_ = s.Inferences.AddEvent(ctx, rec.ID, "completed", map[string]interface{}{"provider": "mock"})
+	_ = s.Inferences.AddEvent(ctx, rec.ID, "completed", map[string]interface{}{"provider": "prompt-shield"})
 	s.Metrics.ObserveInference(runtime.InferenceStatusCompleted, e2e, securityOverhead)
 	slog.Info("inference_completed", "request_id", requestID.String(), "decision", result.Decision, "worker_id", workerID, "latency_ms", e2e)
 

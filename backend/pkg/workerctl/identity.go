@@ -17,7 +17,10 @@ type Identity struct {
 	Version  string
 }
 
-func LoadIdentity(site *string, version string) (*Identity, error) {
+// LoadIdentity resolves the worker's identity. overrideID takes precedence
+// over SPIDER_WORKER_ID and the on-disk .spider-worker-id file; pass "" to
+// use the normal resolution order.
+func LoadIdentity(overrideID string, site *string, version string) (*Identity, error) {
 	if version == "" {
 		version = "0.1.0"
 	}
@@ -25,19 +28,29 @@ func LoadIdentity(site *string, version string) (*Identity, error) {
 	if err != nil {
 		hostname = "unknown"
 	}
-	workerID := os.Getenv("SPIDER_WORKER_ID")
-	if workerID == "" {
-		workerID = loadOrCreateWorkerIDFile()
-	}
-	if workerID == "" {
-		workerID = fmt.Sprintf("%s-%s", hostname, randomSuffix(4))
-	}
 	return &Identity{
-		WorkerID: workerID,
+		WorkerID: ResolveWorkerID(overrideID),
 		Hostname: hostname,
 		Site:     site,
 		Version:  version,
 	}, nil
+}
+
+// ResolveWorkerID determines the worker ID without loading full identity,
+// so callers (e.g. the CLI, before detaching a background process) can know
+// the ID up front. Resolution order: overrideID, SPIDER_WORKER_ID,
+// .spider-worker-id file, then a fresh hostname-based random ID.
+func ResolveWorkerID(overrideID string) string {
+	if overrideID != "" {
+		return overrideID
+	}
+	if v := os.Getenv("SPIDER_WORKER_ID"); v != "" {
+		return v
+	}
+	if id := loadOrCreateWorkerIDFile(); id != "" {
+		return id
+	}
+	return fmt.Sprintf("%s-%s", mustHostname(), randomSuffix(4))
 }
 
 func loadOrCreateWorkerIDFile() string {
