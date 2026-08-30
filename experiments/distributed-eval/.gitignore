@@ -1,0 +1,11 @@
+# Compiled benchmark binary (built via `go build .`)
+spider-bench
+spider-bench.exe
+*.exe
+*.test
+*.out
+
+# Benchmark run outputs — regenerate with `bench`/`compare`, don't commit ad-hoc results.
+# Numbers worth keeping belong in README.md as a written finding, not as a raw JSON diff.
+results/*
+!results/.gitkeep
