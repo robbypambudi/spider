@@ -8,24 +8,26 @@ export function ServingPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-medium">Serving</h1>
-      <p className="text-sm text-zinc-400">
+      <h1 className="text-2xl font-semibold text-slate-900">Serving</h1>
+      <p className="text-sm text-slate-500">
         Cluster serving nodes exist so SPIDER can evaluate defenses under realistic LLM-serving load.
       </p>
       <Card>
-        <h2 className="mb-3 text-sm uppercase text-zinc-500">Nodes</h2>
-        <ul className="space-y-2 font-mono text-sm">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">Nodes</h2>
+        <ul className="space-y-2 font-mono text-sm text-slate-700">
           {(nodes.data ?? []).map((node) => (
             <li key={String(node.worker_id)}>
               {String(node.worker_id)} · {String(node.status)}
             </li>
           ))}
-          {(nodes.data ?? []).length === 0 ? <li className="text-zinc-500">No serving nodes registered.</li> : null}
+          {(nodes.data ?? []).length === 0 ? (
+            <li className="text-slate-500">No serving nodes registered.</li>
+          ) : null}
         </ul>
       </Card>
       <Card>
-        <h2 className="mb-3 text-sm uppercase text-zinc-500">Loaded models</h2>
-        <ul className="space-y-2 font-mono text-sm">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">Loaded models</h2>
+        <ul className="space-y-2 font-mono text-sm text-slate-700">
           {(models.data ?? []).map((model, index) => (
             <li key={`${model.worker_id}-${index}`}>
               {String(model.name)} @ {String(model.worker_id)} · {String(model.status)}

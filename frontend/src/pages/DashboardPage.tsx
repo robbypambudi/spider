@@ -26,16 +26,16 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-medium">Security overview</h1>
-        <p className="text-sm text-zinc-400">
+        <h1 className="text-2xl font-semibold text-slate-900">Security overview</h1>
+        <p className="text-sm text-slate-500">
           Prompt injection defense telemetry for the SPIDER control plane.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {cards.map(([label, value]) => (
           <Card key={label}>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-            <div className="mt-2 font-mono text-2xl">{value}</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
+            <div className="mt-2 font-mono text-2xl text-slate-900">{value}</div>
           </Card>
         ))}
       </div>

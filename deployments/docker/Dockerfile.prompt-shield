@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir uv
+
+COPY backend/cmd/prompt-shield /app
+RUN uv sync --no-dev
+
+ENV SPIDER_PROMPT_SHIELD_MODEL=robbypambudi/prompt-shield-flan-t5-small
+EXPOSE 8081
+CMD ["uv", "run", "python", "main.py"]

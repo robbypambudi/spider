@@ -14,29 +14,32 @@ export function SecurityScanDetailPage() {
     staleTime: 30_000,
   });
 
-  if (!data) return <div className="text-zinc-400">Loading scan…</div>;
+  if (!data) return <div className="text-slate-500">Loading scan…</div>;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-medium">Scan {data.id.slice(0, 8)}</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Scan {data.id.slice(0, 8)}</h1>
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          Decision
+          <div className="text-sm text-slate-500">Decision</div>
           <div className="mt-2">
             <Badge value={data.decision} />
           </div>
         </Card>
         <Card>
-          Score <div className="mt-2 font-mono text-xl">{data.score.toFixed(3)}</div>
+          <div className="text-sm text-slate-500">Score</div>
+          <div className="mt-2 font-mono text-xl text-slate-900">{data.score.toFixed(3)}</div>
         </Card>
         <Card>
-          Threshold <div className="mt-2 font-mono text-xl">{data.threshold ?? "—"}</div>
+          <div className="text-sm text-slate-500">Threshold</div>
+          <div className="mt-2 font-mono text-xl text-slate-900">{data.threshold ?? "—"}</div>
         </Card>
         <Card>
-          Latency <div className="mt-2 font-mono text-xl">{formatMs(data.latency_ms)}</div>
+          <div className="text-sm text-slate-500">Latency</div>
+          <div className="mt-2 font-mono text-xl text-slate-900">{formatMs(data.latency_ms)}</div>
         </Card>
       </div>
-      <Card className="space-y-1 font-mono text-sm">
+      <Card className="space-y-1 font-mono text-sm text-slate-700">
         <div>
           detector={data.detector}@{data.detector_version}
         </div>
@@ -48,8 +51,8 @@ export function SecurityScanDetailPage() {
         <div>model={data.model_target ?? "—"}</div>
       </Card>
       <Card>
-        <h2 className="mb-3 text-sm uppercase text-zinc-500">Detector executions</h2>
-        <ul className="space-y-2 font-mono text-sm">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-slate-500">Detector executions</h2>
+        <ul className="space-y-2 font-mono text-sm text-slate-700">
           {data.detectors.map((item, index) => (
             <li key={`${item.detector}-${index}`}>
               {item.detector} score={item.score.toFixed(3)} injection={String(item.is_injection)}{" "}

@@ -38,7 +38,7 @@ SPIDER Telemetry
 | `backend/cmd/` | Process entrypoints (`api`, `controller`, `worker`, `cli`) |
 | `backend/internal/` | HTTP handlers, services, middleware, telemetry |
 | `backend/pkg/` | Reusable libraries: security pipeline, serving, scheduler, reconciler |
-| `backend/dao/` | SQLAlchemy models, repositories, Alembic |
+| `backend/dao/` | PostgreSQL migrations, pgx repositories |
 | `frontend/` | Vite + React control-plane UI |
 | `experiments/` | Datasets, configs, and evaluation scripts |
 | `deployments/` | Docker, Kubernetes, Helm, Prometheus, Grafana |
@@ -51,15 +51,29 @@ SPIDER Telemetry
 docker compose up -d postgres redis
 ```
 
-### 2. Backend
+### 2. Backend (Go)
 
 ```bash
 cd backend
-uv sync
-copy ..\.env.example ..\.env   # Windows
-# cp ../.env.example ../.env   # Unix
-uv run uvicorn cmd.api.main:app --reload --port 8000
+go mod tidy
+go run ./cmd/api
 ```
+
+For ML detection, start the Prompt-Shield sidecar (models from [Hugging Face Prompt-Shield](https://huggingface.co/collections/robbypambudi/prompt-shield)):
+
+```bash
+cd backend/cmd/prompt-shield
+uv sync
+uv run python main.py
+```
+
+Or run the full stack with Docker Compose (includes `prompt-shield`, `api`, `controller`, `worker`):
+
+```bash
+docker compose up -d
+```
+
+Use `SPIDER_DEFAULT_DETECTOR=rule-based` for local dev without downloading the Flan-T5 model.
 
 Default admin (development bootstrap):
 
@@ -110,7 +124,7 @@ Benign prompts are `ALLOW` and reach `MockLLMProvider`. Injection-like prompts a
 
 ```bash
 cd backend
-uv run pytest
+go test ./...
 ```
 
 The critical invariant:

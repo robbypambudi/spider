@@ -12,19 +12,23 @@ export function MetricsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-medium">Metrics</h1>
-      <p className="text-sm text-zinc-400">
-        JSON summary for the dashboard. Prometheus scrape endpoint is <code>/metrics</code>.
+      <h1 className="text-2xl font-semibold text-slate-900">Metrics</h1>
+      <p className="text-sm text-slate-500">
+        JSON summary for the dashboard. Prometheus scrape endpoint is{" "}
+        <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">/metrics</code>.
       </p>
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          Scans <div className="mt-2 font-mono text-2xl">{data?.total_scans ?? 0}</div>
+          <div className="text-sm text-slate-500">Scans</div>
+          <div className="mt-2 font-mono text-2xl text-slate-900">{data?.total_scans ?? 0}</div>
         </Card>
         <Card>
-          Detection rate <div className="mt-2 font-mono text-2xl">{formatPct(data?.detection_rate)}</div>
+          <div className="text-sm text-slate-500">Detection rate</div>
+          <div className="mt-2 font-mono text-2xl text-slate-900">{formatPct(data?.detection_rate)}</div>
         </Card>
         <Card>
-          Overhead <div className="mt-2 font-mono text-2xl">{formatMs(data?.avg_security_overhead_ms)}</div>
+          <div className="text-sm text-slate-500">Overhead</div>
+          <div className="mt-2 font-mono text-2xl text-slate-900">{formatMs(data?.avg_security_overhead_ms)}</div>
         </Card>
       </div>
     </div>

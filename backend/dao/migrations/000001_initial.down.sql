@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS serving_nodes;
+DROP TABLE IF EXISTS serving_models;
+DROP TABLE IF EXISTS inference_events;
+DROP TABLE IF EXISTS inference_requests;
+DROP TABLE IF EXISTS detector_executions;
+DROP TABLE IF EXISTS security_chunk_results;
+DROP TABLE IF EXISTS security_scans;
+DROP TABLE IF EXISTS worker_heartbeats;
+DROP TABLE IF EXISTS worker_gpus;
+DROP TABLE IF EXISTS workers;
+DROP TABLE IF EXISTS policies;
+DROP TABLE IF EXISTS sites;
+DROP TABLE IF EXISTS users;

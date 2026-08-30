@@ -13,17 +13,20 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
-      - name: Install
-        run: uv sync --group dev
-      - name: Ruff
-        run: uv run ruff check .
-      - name: Mypy
-        run: uv run mypy cmd internal pkg dao
-      - name: Pytest
-        run: uv run pytest
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+      - name: Download modules
+        run: go mod download
+      - name: Test
+        run: go test -p 2 -timeout 60s ./...
+      - name: Build binaries
+        run: |
+          go build -o /dev/null ./cmd/api
+          go build -o /dev/null ./cmd/controller
+          go build -o /dev/null ./cmd/worker
+          go build -o /dev/null ./cmd/cli
 
   frontend:
     runs-on: ubuntu-latest

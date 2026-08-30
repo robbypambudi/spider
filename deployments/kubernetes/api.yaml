@@ -20,13 +20,20 @@ spec:
       containers:
         - name: api
           image: spider-api:0.1.0
+          command: ["/app/spider-api"]
           ports:
             - containerPort: 8000
           env:
             - name: DATABASE_URL
-              value: postgresql+asyncpg://spider:spider@postgres:5432/spider
+              value: postgres://spider:spider@postgres:5432/spider?sslmode=disable
             - name: SPIDER_FAIL_MODE
               value: closed
+            - name: SPIDER_DEFAULT_DETECTOR
+              value: prompt-shield
+            - name: SPIDER_PROMPT_SHIELD_ENDPOINT
+              value: http://prompt-shield:8081
+            - name: SPIDER_PROMPT_SHIELD_MODEL
+              value: robbypambudi/prompt-shield-flan-t5-small
 ---
 apiVersion: v1
 kind: Service

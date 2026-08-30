@@ -1,21 +1,21 @@
 import { cn } from "@/lib/utils";
 
 const tones: Record<string, string> = {
-  ALLOW: "bg-emerald-500/15 text-emerald-300",
-  BLOCK: "bg-red-500/15 text-red-300",
-  REVIEW: "bg-amber-500/15 text-amber-300",
-  ERROR: "bg-zinc-500/15 text-zinc-300",
-  ONLINE: "bg-emerald-500/15 text-emerald-300",
-  OFFLINE: "bg-zinc-500/15 text-zinc-400",
-  BUSY: "bg-amber-500/15 text-amber-300",
+  ALLOW: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  BLOCK: "bg-red-50 text-red-700 ring-1 ring-red-200",
+  REVIEW: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+  ERROR: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+  ONLINE: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  OFFLINE: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  BUSY: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
 };
 
 export function Badge({ value }: { value: string }) {
   return (
     <span
       className={cn(
-        "inline-flex rounded px-2 py-0.5 font-mono text-xs uppercase tracking-wide",
-        tones[value] ?? "bg-zinc-800 text-zinc-300",
+        "inline-flex rounded-md px-2 py-0.5 font-mono text-xs uppercase tracking-wide",
+        tones[value] ?? "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
       )}
     >
       {value}

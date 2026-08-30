@@ -25,56 +25,85 @@ services:
       timeout: 3s
       retries: 10
 
+  prompt-shield:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.prompt-shield
+    environment:
+      SPIDER_PROMPT_SHIELD_MODEL: robbypambudi/prompt-shield-flan-t5-small
+      HF_TOKEN: ${HF_TOKEN:-}
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
   api:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile.api
+    image: spider-backend:latest
     environment:
       SPIDER_ENV: development
-      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      DATABASE_URL: postgres://spider:spider@postgres:5432/spider?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       SPIDER_JWT_SECRET: change-me
       SPIDER_WORKER_TOKEN: development-worker-token
       SPIDER_CORS_ORIGINS: http://localhost:5173,http://localhost:3000
-      SPIDER_DEFAULT_DETECTOR: rule-based
+      SPIDER_DEFAULT_DETECTOR: prompt-shield
+      SPIDER_PROMPT_SHIELD_ENDPOINT: http://prompt-shield:8081
+      SPIDER_PROMPT_SHIELD_MODEL: robbypambudi/prompt-shield-flan-t5-small
       SPIDER_DEFAULT_THRESHOLD: "0.5"
       SPIDER_FAIL_MODE: closed
       SPIDER_LOG_PROMPT_CONTENT: "false"
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      prompt-shield:
+        condition: service_started
 
   controller:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile.api
-    command: ["uv", "run", "python", "-m", "cmd.controller.main"]
+    image: spider-backend:latest
+    command: ["/app/spider-controller"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      DATABASE_URL: postgres://spider:spider@postgres:5432/spider?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       SPIDER_WORKER_OFFLINE_TIMEOUT: "30"
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
   worker:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile.api
-    command: ["uv", "run", "python", "-m", "cmd.worker.main"]
+    image: spider-backend:latest
+    command: ["/app/spider-worker"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://spider:spider@postgres:5432/spider
+      DATABASE_URL: postgres://spider:spider@postgres:5432/spider?sslmode=disable
       SPIDER_API_BASE_URL: http://api:8000
       SPIDER_WORKER_TOKEN: development-worker-token
       SPIDER_DEFAULT_MODEL: mock-llm
       SPIDER_WORKER_ID: local-mock-worker
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     build:

@@ -11,16 +11,18 @@ export function ModelsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-medium">Models</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Models</h1>
       <Card>
-        <ul className="space-y-2 font-mono text-sm">
+        <ul className="space-y-2 font-mono text-sm text-slate-700">
           {(data ?? []).map((model, index) => (
             <li key={`${model.name}-${index}`}>
               {String(model.name)} · {String(model.status)} · worker={String(model.worker_id)}
             </li>
           ))}
           {(data ?? []).length === 0 ? (
-            <li className="text-zinc-500">Start spider-worker to report loaded models (default: mock-llm).</li>
+            <li className="text-slate-500">
+              Start spider-worker to report loaded models (default: mock-llm).
+            </li>
           ) : null}
         </ul>
       </Card>

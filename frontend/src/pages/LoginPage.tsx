@@ -17,9 +17,9 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-canvas p-6">
       <Card className="w-full max-w-md space-y-4">
         <div>
-          <div className="font-mono text-xs uppercase tracking-[0.25em] text-orange-400">SPIDER</div>
-          <h1 className="mt-2 text-xl font-medium">Sign in</h1>
-          <p className="mt-1 text-sm text-zinc-400">
+          <div className="font-mono text-xs uppercase tracking-[0.25em] text-accent">SPIDER</div>
+          <h1 className="mt-2 text-xl font-semibold text-slate-900">Sign in</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Runtime defense control plane. Default lab credentials are prefilled.
           </p>
         </div>
@@ -39,11 +39,11 @@ export function LoginPage() {
             }
           }}
         >
-          <label className="block text-xs text-zinc-400">
+          <label className="block text-xs font-medium text-slate-600">
             Email
             <Input className="mt-1" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <label className="block text-xs text-zinc-400">
+          <label className="block text-xs font-medium text-slate-600">
             Password
             <Input
               className="mt-1"
@@ -52,7 +52,7 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
           <Button type="submit" disabled={pending} className="w-full">
             {pending ? "Signing in…" : "Continue"}
           </Button>
