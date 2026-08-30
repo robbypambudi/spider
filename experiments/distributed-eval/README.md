@@ -34,11 +34,28 @@ go build -o spider-bench.exe .
 
 ### Baseline (single-node)
 
+**Git Bash / Linux / macOS:**
+
+```bash
+./spider-bench.exe bench \
+  --dataset "/c/Users/DS - Research/Documents/spider-internal/labs/PromptShield/validation.json" \
+  --out results/promptshield_baseline.json \
+  --nodes 1
+```
+
+**PowerShell:**
+
 ```powershell
 .\spider-bench.exe bench `
   --dataset "C:\Users\DS - Research\Documents\spider-internal\labs\PromptShield\validation.json" `
   --out results\promptshield_baseline.json `
   --nodes 1
+```
+
+**One line (any shell):**
+
+```bash
+./spider-bench.exe bench --dataset "/c/Users/DS - Research/Documents/spider-internal/labs/PromptShield/validation.json" --out results/promptshield_baseline.json --nodes 1
 ```
 
 Flag default sudah lab-aligned (`prompt-shield`, `token`, 256/0). Sidecar harus jalan di `http://localhost:8081`.

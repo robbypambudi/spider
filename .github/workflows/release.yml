@@ -61,11 +61,21 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           ext=""
-          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          # -s -w (strip symbols) shrinks the binary but, on Windows, symbol-less
+          # Go binaries are also more likely to trip antivirus heuristic/ML
+          # detections (e.g. Defender's Wacatac.B!ml) — a well-known false-positive
+          # pattern for unsigned Go executables. Keep debug info on Windows builds;
+          # strip on the others where it isn't a concern.
+          ldflags=""
+          if [ "$GOOS" = "windows" ]; then
+            ext=".exe"
+          else
+            ldflags="-s -w"
+          fi
           for bin in api controller worker spider; do
             name="spider-${bin}"
             if [ "$bin" = "spider" ]; then name="spider"; fi
-            go build -trimpath -ldflags "-s -w" -o "dist/${name}${ext}" "./cmd/${bin}"
+            go build -trimpath -ldflags "$ldflags" -o "dist/${name}${ext}" "./cmd/${bin}"
           done
 
       - name: Package archive

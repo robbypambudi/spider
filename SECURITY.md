@@ -35,3 +35,29 @@ reports are especially valuable around:
 `RuleBasedDetector` is for development and testing only. It is not a
 production-quality prompt injection detector. Do not treat rule-based scores as
 a security guarantee.
+
+## Known false positive: Windows Defender flags release binaries
+
+Prebuilt Windows binaries from [Releases](https://github.com/robbypambudi/spider/releases)
+(`spider.exe`, `spider-worker.exe`) may be flagged by Microsoft Defender as
+`Trojan:Win32/Wacatac.B!ml`. The `!ml` suffix means this is a **cloud ML
+heuristic classification**, not a signature match — SPIDER does not touch the
+registry, Group Policy, or any of the other behavior described in that
+detection family. It's a known false-positive pattern for unsigned Go binaries
+that self-relaunch as a hidden background process (`spider worker join
+--detach`, see [`backend/pkg/workerctl/daemon_windows.go`](backend/pkg/workerctl/daemon_windows.go))
+— that specific combination (hidden window, self re-exec, file persistence,
+outbound network calls) resembles heuristics used to catch backdoors, even
+though every part of it here is legitimate.
+
+Mitigations in place:
+
+- Windows release builds keep debug symbols (no `-s -w`) — stripped binaries
+  are more likely to trip AV heuristics; see [`.github/workflows/release.yml`](.github/workflows/release.yml).
+- Every release includes `SHA256SUMS.txt` — verify the binary you downloaded
+  matches before trusting it.
+
+Not yet done: code signing (requires a paid certificate) and submission to
+[Microsoft's file submission portal](https://www.microsoft.com/en-us/wdsi/filesubmission)
+for false-positive review. If you hit this detection, verify the checksum,
+and/or build from source instead (`cd backend && go build ./cmd/spider`).
