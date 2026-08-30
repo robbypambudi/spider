@@ -51,3 +51,23 @@ func (s *WorkerService) Inspect(ctx context.Context, workerID string) (apis.Work
 	}
 	return s.Workers.AsResource(ctx, w)
 }
+
+func (s *WorkerService) Delete(ctx context.Context, workerID string) error {
+	err := s.Workers.DeleteWorker(ctx, workerID)
+	if err != nil {
+		return spidererrors.NotFound("Worker not found")
+	}
+	return nil
+}
+
+func (s *WorkerService) PruneOffline(ctx context.Context) (int64, error) {
+	return s.Workers.PruneOfflineWorkers(ctx)
+}
+
+func (s *WorkerService) Update(ctx context.Context, workerID string, req apis.UpdateWorkerRequest) (apis.WorkerResource, error) {
+	w, err := s.Workers.UpdateWorker(ctx, workerID, req)
+	if err != nil {
+		return apis.WorkerResource{}, spidererrors.NotFound("Worker not found")
+	}
+	return s.Workers.AsResource(ctx, w)
+}

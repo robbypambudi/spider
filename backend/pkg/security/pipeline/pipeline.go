@@ -25,11 +25,35 @@ type Pipeline struct {
 }
 
 type BuildOptions struct {
-	DetectorName string
-	Threshold    float64
-	ChunkSize    int
-	ChunkOverlap int
-	FailMode     string
+	DetectorName         string
+	Threshold            float64
+	Chunker              string
+	ChunkSize            int
+	ChunkOverlap         int
+	FailMode             string
+	PromptShieldEndpoint string
+}
+
+func NewChunker(chunkerName, endpoint string, chunkSize, chunkOverlap int) chunking.Chunker {
+	if chunkSize <= 0 {
+		chunkSize = 256
+	}
+	if chunkOverlap < 0 {
+		chunkOverlap = 0
+	}
+	switch chunkerName {
+	case "token":
+		if endpoint != "" {
+			return chunking.NewSidecarTokenChunker(endpoint, chunkSize, chunkOverlap)
+		}
+	}
+	if chunkOverlap >= chunkSize {
+		chunkOverlap = chunkSize / 8
+	}
+	if chunkSize <= 0 {
+		chunkSize = 2048
+	}
+	return chunking.NewFixedSizeChunker(chunkSize, chunkOverlap)
 }
 
 func BuildDefault(opts BuildOptions) (*Pipeline, error) {
@@ -40,24 +64,35 @@ func BuildDefault(opts BuildOptions) (*Pipeline, error) {
 	}
 	chunkSize := opts.ChunkSize
 	if chunkSize <= 0 {
-		chunkSize = 2048
+		if opts.Chunker == "token" {
+			chunkSize = 256
+		} else {
+			chunkSize = 2048
+		}
 	}
 	chunkOverlap := opts.ChunkOverlap
 	if chunkOverlap < 0 {
 		chunkOverlap = 0
 	}
-	if chunkOverlap >= chunkSize {
-		chunkOverlap = chunkSize / 8
-	}
 	policy := policies.NewThresholdPolicy(opts.Threshold, "block")
 	return &Pipeline{
 		Preprocessor: &preprocessing.DefaultPreprocessor{},
-		Chunker:      chunking.NewFixedSizeChunker(chunkSize, chunkOverlap),
+		Chunker:      NewChunker(opts.Chunker, opts.PromptShieldEndpoint, chunkSize, chunkOverlap),
 		Detector:     factory(),
 		Aggregator:   &aggregation.MaxScoreAggregator{},
 		Policy:       policy,
 		Enforcer:     enforcement.NewEnforcer(opts.FailMode),
 	}, nil
+}
+
+func (p *Pipeline) SetPolicy(threshold float64, actionOnDetection string) {
+	p.Policy = policies.NewThresholdPolicy(threshold, actionOnDetection)
+}
+
+func (p *Pipeline) SetChunker(c chunking.Chunker) {
+	if c != nil {
+		p.Chunker = c
+	}
 }
 
 func (p *Pipeline) Inspect(ctx context.Context, request apis.SecurityRequest) (result apis.SecurityResult) {

@@ -154,7 +154,11 @@ Benign prompts are `ALLOW` and reach the configured `LLMProvider` (`mock` or `pr
 
 ## CLI
 
-The CLI lives at `backend/cmd/spider`. Install it once as a `spider` command on your `PATH`:
+The CLI lives at `backend/cmd/spider`. Two ways to get it:
+
+**Prebuilt binary (no Go toolchain needed)** — grab `spider` (or `spider.exe` on Windows) for your OS/arch from the [Releases page](https://github.com/robbypambudi/spider/releases), extract, and run. Useful for a second machine that only needs to run the CLI/worker — e.g. joining it to a cluster for a distributed benchmark — without installing Go there. Built by [`.github/workflows/release.yml`](.github/workflows/release.yml) on every `vX.Y.Z` tag push (also produces `spider-api`, `spider-controller`, `spider-worker` the same way).
+
+**`go install`** (if you already have Go 1.23+):
 
 ```bash
 cd backend
@@ -292,6 +296,8 @@ Deeper notes per pipeline stage live under [`docs/`](docs):
 
 [architecture](docs/architecture.md) · [security pipeline](docs/security-pipeline.md) · [preprocessing/chunking](docs/chunking.md) · [detectors](docs/detectors.md) · [aggregation](docs/aggregation.md) · [policies](docs/policies.md) · [enforcement](docs/enforcement.md) · [evaluation](docs/evaluation.md) · [serving](docs/serving.md) · [scheduler](docs/scheduler.md) · [cluster](docs/cluster.md) · [worker protocol](docs/worker-protocol.md) · [inference runtime](docs/inference-runtime.md) · [metrics](docs/metrics.md) · [development](docs/development.md)
 
+Baseline vs distributed benchmark harness (FP/FN, throughput, latency, Jain's Fairness Index): [`experiments/distributed-eval/`](experiments/distributed-eval/README.md).
+
 ## Phases
 
 1. Control plane foundation (this repo)
@@ -304,4 +310,7 @@ Deeper notes per pipeline stage live under [`docs/`](docs):
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Third-party Prompt-Shield model weights on Hugging Face remain under their
+respective model licenses.

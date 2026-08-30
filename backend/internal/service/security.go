@@ -23,12 +23,16 @@ func PromptHash(text string) string {
 
 type SecurityService struct {
 	Pipeline *pipeline.Pipeline
+	Policy   *PolicyService
 	Scans    SecurityScanStore
 	Settings *config.Settings
 	Metrics  *telemetry.Metrics
 }
 
 func (s *SecurityService) Inspect(ctx context.Context, text string, opts InspectOptions) (apis.SecurityResult, *store.SecurityScan, error) {
+	if s.Policy != nil {
+		_ = s.Policy.ApplyActivePolicy(ctx)
+	}
 	request := apis.SecurityRequest{
 		RequestID: opts.RequestID,
 		Text:      text,

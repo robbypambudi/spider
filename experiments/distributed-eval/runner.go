@@ -25,6 +25,7 @@ type BenchConfig struct {
 	ChunkOverlap         int
 	FailMode             string
 	PromptShieldEndpoint string
+	PromptShieldModel    string
 
 	Nodes              int
 	Strategy           string // "round-robin" | "least-loaded"
@@ -66,6 +67,7 @@ type BenchResult struct {
 	Chunker              string  `json:"chunker"`
 	FailMode             string  `json:"fail_mode"`
 	PromptShieldEndpoint string  `json:"prompt_shield_endpoint,omitempty"`
+	PromptShieldModel    string  `json:"prompt_shield_model,omitempty"`
 
 	Nodes              int    `json:"nodes"`
 	Strategy           string `json:"strategy,omitempty"`
@@ -199,6 +201,7 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 		Chunker:              cfg.Chunker,
 		FailMode:             cfg.FailMode,
 		PromptShieldEndpoint: cfg.PromptShieldEndpoint,
+		PromptShieldModel:    cfg.PromptShieldModel,
 		Nodes:                cfg.Nodes,
 		Strategy:             strategy,
 		ConcurrencyPerNode:   cfg.ConcurrencyPerNode,

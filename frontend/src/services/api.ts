@@ -1,10 +1,14 @@
 import type {
+  CreatePolicyRequest,
   InferenceResponse,
   MetricsSummary,
+  PolicyView,
   PromptShieldModel,
+  RuntimeSettingsView,
   ScanDetail,
   ScanListItem,
   ScanResponse,
+  UpdatePolicyRequest,
   WorkerView,
 } from "@/types/api";
 
@@ -60,7 +64,23 @@ export const api = {
     }),
   detectors: () =>
     request<Array<{ name: string; status: string; warning: string }>>("/api/v1/security/detectors"),
-  policies: () => request<Array<Record<string, unknown>>>("/api/v1/security/policies"),
+  policies: () => request<PolicyView[]>("/api/v1/security/policies"),
+  policy: (id: string) => request<PolicyView>(`/api/v1/security/policies/${id}`),
+  createPolicy: (body: CreatePolicyRequest) =>
+    request<PolicyView>("/api/v1/security/policies", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updatePolicy: (id: string, body: UpdatePolicyRequest) =>
+    request<PolicyView>(`/api/v1/security/policies/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deletePolicy: (id: string) =>
+    request<{ status: string }>(`/api/v1/security/policies/${id}`, { method: "DELETE" }),
+  activatePolicy: (id: string) =>
+    request<PolicyView>(`/api/v1/security/policies/${id}/activate`, { method: "POST" }),
+  runtimeSettings: () => request<RuntimeSettingsView>("/api/v1/settings/runtime"),
   inference: (model: string, prompt: string) =>
     request<InferenceResponse>("/api/v1/inference", {
       method: "POST",
@@ -69,6 +89,15 @@ export const api = {
   inferenceHistory: () => request<Array<Record<string, unknown>>>("/api/v1/inference"),
   workers: () => request<WorkerView[]>("/api/v1/workers"),
   worker: (id: string) => request<WorkerView>(`/api/v1/workers/${id}`),
+  updateWorker: (id: string, body: { hostname?: string; site?: string; metadata?: Record<string, unknown> }) =>
+    request<WorkerView>(`/api/v1/workers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteWorker: (id: string) =>
+    request<{ status: string; worker_id: string }>(`/api/v1/workers/${id}`, { method: "DELETE" }),
+  pruneOfflineWorkers: () =>
+    request<{ status: string; count: number }>("/api/v1/workers/prune-offline", { method: "POST" }),
   servingNodes: () => request<Array<Record<string, unknown>>>("/api/v1/serving/nodes"),
   servingModels: () => request<PromptShieldModel[]>("/api/v1/serving/models"),
   servingCatalog: () => request<PromptShieldModel[]>("/api/v1/serving/catalog"),

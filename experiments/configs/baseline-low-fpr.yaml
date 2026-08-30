@@ -5,11 +5,14 @@ dataset:
   path: experiments/datasets/test.jsonl
 
 security:
-  detector: rule-based
+  detector: prompt-shield
+  prompt_shield_endpoint: http://localhost:8081
+  prompt_shield_model: robbypambudi/prompt-shield-flan-t5-small
   chunker:
-    type: fixed
-    size: 2048
-  threshold: 0.99
+    type: token
+    size: 256
+    overlap: 0
+  threshold: 0.5
   policy:
     action_on_detection: block
 

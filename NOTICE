@@ -1,0 +1,9 @@
+SPIDER
+Copyright 2026 SPIDER Contributors
+
+This product includes software developed as part of the SPIDER runtime
+defense framework for prompt injection detection in LLM-serving clusters.
+
+Third-party model weights (Prompt-Shield checkpoints on Hugging Face) are
+not covered by this NOTICE or the Apache License; see each model's license
+on https://huggingface.co/collections/robbypambudi/prompt-shield

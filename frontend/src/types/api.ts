@@ -1,5 +1,46 @@
 export type SecurityDecision = "ALLOW" | "BLOCK" | "REVIEW" | "ERROR";
 
+export interface PolicyView {
+  id?: string;
+  name: string;
+  kind: string;
+  threshold: number;
+  action_on_detection: string;
+  chunker: string;
+  chunk_size: number;
+  chunk_overlap: number;
+  is_default: boolean;
+  status?: string;
+}
+
+export interface CreatePolicyRequest {
+  name: string;
+  threshold: number;
+  action_on_detection: string;
+  chunker: string;
+  chunk_size: number;
+  chunk_overlap: number;
+  is_default?: boolean;
+}
+
+export interface UpdatePolicyRequest {
+  name?: string;
+  threshold?: number;
+  action_on_detection?: string;
+  chunker?: string;
+  chunk_size?: number;
+  chunk_overlap?: number;
+  is_default?: boolean;
+}
+
+export interface RuntimeSettingsView {
+  default_detector: string;
+  fail_mode: string;
+  chunker: string;
+  chunk_size: number;
+  chunk_overlap: number;
+}
+
 export interface DetectorView {
   detector: string;
   score: number;
@@ -72,6 +113,15 @@ export interface MetricsSummary {
   workers_total: number;
 }
 
+export interface GPUResource {
+  index: number;
+  vendor: string;
+  name: string;
+  memory_total_mb: number;
+  memory_used_mb: number;
+  utilization: number;
+}
+
 export interface WorkerView {
   worker_id: string;
   hostname: string;
@@ -82,14 +132,7 @@ export interface WorkerView {
   resources: {
     cpu_total: number;
     memory_total_mb: number;
-    gpus: Array<{
-      index: number;
-      vendor: string;
-      name: string;
-      memory_total_mb: number;
-      memory_used_mb: number;
-      utilization: number;
-    }> | null;
+    gpus: GPUResource[] | null;
   };
   models: Array<{ name: string; status: string }>;
 }

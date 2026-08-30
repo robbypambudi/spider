@@ -180,6 +180,72 @@ func (r *WorkerRepo) LastHeartbeatAt(ctx context.Context, workerID string) (*tim
 	return w.LastHeartbeatAt, nil
 }
 
+func (r *WorkerRepo) DeleteWorker(ctx context.Context, workerID string) error {
+	_, _ = r.pool.Exec(ctx, `DELETE FROM serving_models WHERE worker_id = $1`, workerID)
+	_, _ = r.pool.Exec(ctx, `DELETE FROM serving_nodes WHERE worker_id = $1`, workerID)
+	res, err := r.pool.Exec(ctx, `DELETE FROM workers WHERE worker_id = $1`, workerID)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (r *WorkerRepo) PruneOfflineWorkers(ctx context.Context) (int64, error) {
+	rows, err := r.pool.Query(ctx, `SELECT worker_id FROM workers WHERE status = $1`, runtime.WorkerStatusOffline)
+	if err != nil {
+		return 0, err
+	}
+	var offlineIDs []string
+	for rows.Next() {
+		var wid string
+		if err := rows.Scan(&wid); err == nil {
+			offlineIDs = append(offlineIDs, wid)
+		}
+	}
+	rows.Close()
+
+	for _, wid := range offlineIDs {
+		_, _ = r.pool.Exec(ctx, `DELETE FROM serving_models WHERE worker_id = $1`, wid)
+		_, _ = r.pool.Exec(ctx, `DELETE FROM serving_nodes WHERE worker_id = $1`, wid)
+	}
+
+	res, err := r.pool.Exec(ctx, `DELETE FROM workers WHERE status = $1`, runtime.WorkerStatusOffline)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected(), nil
+}
+
+func (r *WorkerRepo) UpdateWorker(ctx context.Context, workerID string, req apis.UpdateWorkerRequest) (*WorkerRow, error) {
+	w, err := r.GetByWorkerID(ctx, workerID)
+	if err != nil {
+		return nil, err
+	}
+	hostname := w.Hostname
+	if req.Hostname != nil && *req.Hostname != "" {
+		hostname = *req.Hostname
+	}
+	site := w.Site
+	if req.Site != nil {
+		site = req.Site
+	}
+	metaJSON := w.MetadataJSON
+	if req.Metadata != nil {
+		b, _ := json.Marshal(req.Metadata)
+		metaJSON = string(b)
+	}
+	now := time.Now().UTC()
+	_, err = r.pool.Exec(ctx, `UPDATE workers SET hostname=$2, site=$3, metadata_json=$4, updated_at=$5 WHERE worker_id=$1`,
+		workerID, hostname, site, metaJSON, now)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByWorkerID(ctx, workerID)
+}
+
 func (r *WorkerRepo) ListServingNodes(ctx context.Context) ([]map[string]interface{}, error) {
 	rows, err := r.pool.Query(ctx, `SELECT id, worker_id, status FROM serving_nodes`)
 	if err != nil {

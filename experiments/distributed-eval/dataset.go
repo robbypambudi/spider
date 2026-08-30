@@ -15,20 +15,25 @@ type Sample struct {
 	IsInjection bool   `json:"is_injection"`
 }
 
-// promptShieldRow matches the {"prompt": "...", "label": 0|1} format used by
-// the real Prompt-Shield fine-tuning dataset (spider-internal/labs/PromptShield/
-// {train,test,validation}.json — a single JSON array, label 1 = injection).
+// promptShieldRow matches {"prompt": "...", "label": 0|1} in spider-internal/labs/PromptShield/*.json
 type promptShieldRow struct {
 	Prompt string `json:"prompt"`
 	Label  int    `json:"label"`
 }
 
-// loadDataset accepts two formats, auto-detected from the first non-blank byte:
+// benchmarkRow matches camera-ready eval JSON (instruction/input/flag) used in
+// spider-internal/labs/PromptShieldCode and eval_chunked.py.
+type benchmarkRow struct {
+	Instruction string `json:"instruction"`
+	Input       string `json:"input"`
+	Flag        int    `json:"flag"`
+}
+
+// loadDataset accepts formats auto-detected from the first JSON object:
 //
-//   - JSONL, one {"text": "...", "is_injection": true|false} object per line
-//     (this tool's own format — see `gendata`).
-//   - a single JSON array of {"prompt": "...", "label": 0|1} objects (the
-//     real Prompt-Shield dataset format). label 1 maps to is_injection=true.
+//   - Camera-ready benchmark array: {"instruction","input","flag",...} — text via extractPrompt (lab)
+//   - Prompt-Shield fine-tune array: {"prompt","label"} — label 1 = injection
+//   - JSONL: {"text","is_injection"} per line (load/smoke only, not for paper metrics)
 func loadDataset(path string) ([]Sample, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -37,9 +42,46 @@ func loadDataset(path string) ([]Sample, error) {
 
 	trimmed := bytes.TrimLeft(data, " \t\r\n")
 	if len(trimmed) > 0 && trimmed[0] == '[' {
-		return loadPromptShieldArray(trimmed)
+		return loadJSONArray(trimmed)
 	}
 	return loadJSONL(data)
+}
+
+func loadJSONArray(data []byte) ([]Sample, error) {
+	var peek []json.RawMessage
+	if err := json.Unmarshal(data, &peek); err != nil {
+		return nil, fmt.Errorf("parse JSON array: %w", err)
+	}
+	if len(peek) == 0 {
+		return nil, fmt.Errorf("dataset has no samples")
+	}
+
+	var meta map[string]json.RawMessage
+	if err := json.Unmarshal(peek[0], &meta); err != nil {
+		return nil, fmt.Errorf("parse first row: %w", err)
+	}
+	if _, ok := meta["instruction"]; ok {
+		return loadBenchmarkArray(data)
+	}
+	return loadPromptShieldArray(data)
+}
+
+func loadBenchmarkArray(data []byte) ([]Sample, error) {
+	var rows []benchmarkRow
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, fmt.Errorf("parse camera-ready benchmark JSON: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("dataset has no samples")
+	}
+	samples := make([]Sample, len(rows))
+	for i, r := range rows {
+		samples[i] = Sample{
+			Text:        extractPrompt(r.Instruction, r.Input),
+			IsInjection: r.Flag == 1,
+		}
+	}
+	return samples, nil
 }
 
 func loadPromptShieldArray(data []byte) ([]Sample, error) {

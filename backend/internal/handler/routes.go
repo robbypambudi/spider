@@ -29,6 +29,12 @@ func MountAPI(r chi.Router, c *app.Container) {
 	r.With(authMW).Get("/security/scans/{scan_id}", getScanHandler(c))
 	r.With(authMW).Get("/security/detectors", listDetectorsHandler(c))
 	r.With(authMW).Get("/security/policies", listPoliciesHandler(c))
+	r.With(authMW).Get("/security/policies/{policy_id}", getPolicyHandler(c))
+	r.With(authMW).Post("/security/policies", createPolicyHandler(c))
+	r.With(authMW).Put("/security/policies/{policy_id}", updatePolicyHandler(c))
+	r.With(authMW).Delete("/security/policies/{policy_id}", deletePolicyHandler(c))
+	r.With(authMW).Post("/security/policies/{policy_id}/activate", activatePolicyHandler(c))
+	r.With(authMW).Get("/settings/runtime", runtimeSettingsHandler(c))
 	r.With(authMW).Post("/security/evaluate", evaluateHandler(c))
 
 	r.With(authMW).Post("/inference", inferHandler(c))
@@ -38,6 +44,9 @@ func MountAPI(r chi.Router, c *app.Container) {
 	r.With(workerMW).Post("/workers/{worker_id}/heartbeat", heartbeatHandler(c))
 	r.With(authMW).Get("/workers", listWorkersHandler(c))
 	r.With(authMW).Get("/workers/{worker_id}", getWorkerHandler(c))
+	r.With(authMW).Put("/workers/{worker_id}", updateWorkerHandler(c))
+	r.With(authMW).Delete("/workers/{worker_id}", deleteWorkerHandler(c))
+	r.With(authMW).Post("/workers/prune-offline", pruneOfflineWorkersHandler(c))
 
 	r.With(authMW).Get("/serving/nodes", servingNodesHandler(c))
 	r.With(authMW).Get("/serving/models", servingModelsHandler(c))
@@ -232,6 +241,129 @@ func listPoliciesHandler(c *app.Container) http.HandlerFunc {
 	}
 }
 
+func requireAdmin(c *app.Container, r *http.Request) (*store.User, error) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		return nil, spidererrors.Authentication("")
+	}
+	if err := c.Auth.RequireRoles(user, "ADMIN"); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func getPolicyHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := uuid.Parse(chi.URLParam(r, "policy_id"))
+		if err != nil {
+			WriteError(w, spidererrors.Validation("invalid policy_id"))
+			return
+		}
+		item, err := c.Policy.GetPolicy(r.Context(), id)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, item)
+	}
+}
+
+func createPolicyHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := requireAdmin(c, r); err != nil {
+			WriteError(w, err)
+			return
+		}
+		var body apis.CreatePolicyRequest
+		if err := decodeJSON(r, &body); err != nil {
+			WriteError(w, err)
+			return
+		}
+		item, err := c.Policy.CreatePolicy(r.Context(), body)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusCreated, item)
+	}
+}
+
+func updatePolicyHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := requireAdmin(c, r); err != nil {
+			WriteError(w, err)
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(r, "policy_id"))
+		if err != nil {
+			WriteError(w, spidererrors.Validation("invalid policy_id"))
+			return
+		}
+		var body apis.UpdatePolicyRequest
+		if err := decodeJSON(r, &body); err != nil {
+			WriteError(w, err)
+			return
+		}
+		item, err := c.Policy.UpdatePolicy(r.Context(), id, body)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, item)
+	}
+}
+
+func deletePolicyHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := requireAdmin(c, r); err != nil {
+			WriteError(w, err)
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(r, "policy_id"))
+		if err != nil {
+			WriteError(w, spidererrors.Validation("invalid policy_id"))
+			return
+		}
+		if err := c.Policy.DeletePolicy(r.Context(), id); err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	}
+}
+
+func activatePolicyHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, err := requireAdmin(c, r); err != nil {
+			WriteError(w, err)
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(r, "policy_id"))
+		if err != nil {
+			WriteError(w, spidererrors.Validation("invalid policy_id"))
+			return
+		}
+		item, err := c.Policy.SetDefaultPolicy(r.Context(), id)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, item)
+	}
+}
+
+func runtimeSettingsHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		WriteJSON(w, http.StatusOK, apis.RuntimeSettingsView{
+			DefaultDetector: c.Settings.DefaultDetector,
+			FailMode:        c.Settings.FailMode,
+			Chunker:         c.Settings.Chunker,
+			ChunkSize:       c.Settings.ChunkSize,
+			ChunkOverlap:    c.Settings.ChunkOverlap,
+		})
+	}
+}
+
 func evaluateHandler(c *app.Container) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body apis.EvaluateRequest
@@ -351,6 +483,45 @@ func getWorkerHandler(c *app.Container) http.HandlerFunc {
 			return
 		}
 		WriteJSON(w, http.StatusOK, res)
+	}
+}
+
+func updateWorkerHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workerID := chi.URLParam(r, "worker_id")
+		var body apis.UpdateWorkerRequest
+		if err := decodeJSON(r, &body); err != nil {
+			WriteError(w, err)
+			return
+		}
+		res, err := c.Worker.Update(r.Context(), workerID, body)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, res)
+	}
+}
+
+func deleteWorkerHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		workerID := chi.URLParam(r, "worker_id")
+		if err := c.Worker.Delete(r.Context(), workerID); err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted", "worker_id": workerID})
+	}
+}
+
+func pruneOfflineWorkersHandler(c *app.Container) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		count, err := c.Worker.PruneOffline(r.Context())
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]interface{}{"status": "pruned", "count": count})
 	}
 }
 

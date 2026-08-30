@@ -5,32 +5,46 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/spider/spider/pkg/security/detectors"
 )
 
 func runBench(args []string) error {
 	fs := flag.NewFlagSet("bench", flag.ExitOnError)
-	dataset := fs.String("dataset", "datasets/injection-bench-1000.jsonl", "path to labeled JSONL dataset")
+	dataset := fs.String("dataset", "", "path to Prompt-Shield JSON array or JSONL (required)")
 	out := fs.String("out", "", "path to write the JSON result report (required)")
-	detector := fs.String("detector", "rule-based", "detector: rule-based | noop | prompt-shield")
-	threshold := fs.Float64("threshold", 0.5, "decision threshold (score >= threshold => predicted injection)")
-	chunker := fs.String("chunker", "fixed", "chunker: fixed | token")
-	chunkSize := fs.Int("chunk-size", 2048, "chunk size (chars for fixed, tokens for token chunker)")
-	chunkOverlap := fs.Int("chunk-overlap", 128, "chunk overlap")
+	detector := fs.String("detector", defaultDetector, "detector (must be prompt-shield)")
+	threshold := fs.Float64("threshold", 0.5, "decision threshold for reporting (score >= threshold => predicted injection); TPR@FPR uses ROC sweep")
+	chunker := fs.String("chunker", defaultChunker, "chunker (must be token)")
+	chunkSize := fs.Int("chunk-size", defaultChunkSize, "token window size W (lab default 256)")
+	chunkOverlap := fs.Int("chunk-overlap", defaultChunkOverlap, "token overlap O (lab wave-1 default 0)")
 	failMode := fs.String("fail-mode", "closed", "closed | open, mirrors SPIDER_FAIL_MODE")
-	promptShieldEndpoint := fs.String("prompt-shield-endpoint", "http://localhost:8081", "Prompt-Shield sidecar URL (only used when --detector=prompt-shield or --chunker=token)")
+	promptShieldEndpoint := fs.String("prompt-shield-endpoint", defaultPromptShieldEndpoint, "Prompt-Shield sidecar URL")
+	promptShieldModel := fs.String("prompt-shield-model", defaultPromptShieldModel, "Hugging Face model id (e.g. robbypambudi/prompt-shield-flan-t5-small)")
 
 	nodes := fs.Int("nodes", 1, "number of simulated nodes (1 = single-node baseline)")
 	strategy := fs.String("strategy", "least-loaded", "dispatch strategy when nodes > 1: least-loaded | round-robin")
 	concurrency := fs.Int("concurrency-per-node", 4, "concurrent goroutines per node (simulates concurrent clients hitting that node)")
 	repeat := fs.Int("repeat", 1, "replay the dataset this many times, to inflate a small dataset into a sustained-load run")
-	targetFPRs := fs.String("target-fpr", "0.0005,0.001,0.005,0.01", "comma-separated target FPRs for TPR@FPR reporting")
+	targetFPRs := fs.String("target-fpr", defaultTargetFPR, "comma-separated target FPRs for TPR@FPR reporting")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if *dataset == "" {
+		return fmt.Errorf("--dataset is required (Prompt-Shield JSON from spider-internal/labs, e.g. PromptShield/test.json or camera_ready .../evaluation_benchmark_en.json)")
+	}
 	if *out == "" {
 		return fmt.Errorf("--out is required (path to write the JSON result)")
 	}
+	if err := validateLabConfig(*detector, *chunker); err != nil {
+		return err
+	}
+	if *chunkOverlap >= *chunkSize {
+		return fmt.Errorf("--chunk-overlap must be smaller than --chunk-size (lab constraint)")
+	}
+
+	detectors.RegisterPromptShield(*promptShieldEndpoint, *promptShieldModel)
 
 	fprs, err := parseFloatList(*targetFPRs)
 	if err != nil {
@@ -51,6 +65,7 @@ func runBench(args []string) error {
 		ChunkOverlap:         *chunkOverlap,
 		FailMode:             *failMode,
 		PromptShieldEndpoint: *promptShieldEndpoint,
+		PromptShieldModel:    *promptShieldModel,
 		Nodes:                *nodes,
 		Strategy:             *strategy,
 		ConcurrencyPerNode:   *concurrency,

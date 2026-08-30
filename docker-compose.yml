@@ -32,6 +32,7 @@ services:
     environment:
       SPIDER_PROMPT_SHIELD_MODEL: robbypambudi/prompt-shield-flan-t5-small
       HF_TOKEN: ${HF_TOKEN:-}
+      SPIDER_DEFAULT_THRESHOLD: "0.5"
     ports:
       - "8081:8081"
     healthcheck:
@@ -57,6 +58,9 @@ services:
       SPIDER_PROMPT_SHIELD_ENDPOINT: http://prompt-shield:8081
       SPIDER_PROMPT_SHIELD_MODEL: robbypambudi/prompt-shield-flan-t5-small
       SPIDER_DEFAULT_THRESHOLD: "0.5"
+      SPIDER_CHUNKER: token
+      SPIDER_CHUNK_SIZE: "256"
+      SPIDER_CHUNK_OVERLAP: "0"
       SPIDER_FAIL_MODE: closed
       SPIDER_LOG_PROMPT_CONTENT: "false"
     ports:

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,11 +57,13 @@ func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 	detectors.RegisterPromptShieldEnsemble(settings.PromptShieldEndpoint, settings.PromptShieldModel)
 
 	pipe, err := pipeline.BuildDefault(pipeline.BuildOptions{
-		DetectorName: settings.DefaultDetector,
-		Threshold:    settings.DefaultThreshold,
-		ChunkSize:    settings.ChunkSize,
-		ChunkOverlap: settings.ChunkOverlap,
-		FailMode:     settings.FailMode,
+		DetectorName:         settings.DefaultDetector,
+		Threshold:            settings.DefaultThreshold,
+		Chunker:              settings.Chunker,
+		ChunkSize:            settings.ChunkSize,
+		ChunkOverlap:         settings.ChunkOverlap,
+		FailMode:             settings.FailMode,
+		PromptShieldEndpoint: settings.PromptShieldEndpoint,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build pipeline: %w", err)
@@ -82,8 +85,9 @@ func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 	inferences := store.NewInferenceRepo(pool)
 
 	authSvc := &service.AuthService{Users: users, Settings: settings}
+	policySvc := &service.PolicyService{Policies: policies, Settings: settings, Pipeline: pipe}
 	secSvc := &service.SecurityService{
-		Pipeline: pipe, Scans: scans, Settings: settings, Metrics: metrics,
+		Pipeline: pipe, Policy: policySvc, Scans: scans, Settings: settings, Metrics: metrics,
 	}
 	infSvc := &service.InferenceService{
 		Security: secSvc, Enforcer: pipe.Enforcer, Router: servingRouter,
@@ -98,7 +102,7 @@ func Build(settings *config.Settings, db *dao.DB) (*Container, error) {
 		Provider: provider, Metrics: metrics,
 		Auth: authSvc, Security: secSvc, Inference: infSvc,
 		Worker: &service.WorkerService{Workers: workers, Token: settings.WorkerToken},
-		Policy: &service.PolicyService{Policies: policies, Settings: settings},
+		Policy: policySvc,
 		Serving: &service.ServingService{
 			Workers: workers, Settings: settings, Pipeline: pipe, Provider: shieldProvider,
 		},
@@ -110,5 +114,8 @@ func Bootstrap(c *Container) error {
 	if err := c.DB.Migrate(c.Settings); err != nil {
 		return err
 	}
-	return store.Bootstrap(c.DB.Pool, c.Settings)
+	if err := store.Bootstrap(c.DB.Pool, c.Settings); err != nil {
+		return err
+	}
+	return c.Policy.ApplyActivePolicy(context.Background())
 }

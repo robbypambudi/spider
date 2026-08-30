@@ -39,13 +39,15 @@ func main() {
 }
 
 func usage() {
-	fmt.Println(`spider-bench — baseline vs distributed evaluation harness for SPIDER's security pipeline
+	fmt.Println(`spider-bench — Prompt-Shield baseline vs distributed evaluation (spider-internal/labs methodology)
 
 Usage:
-  go run . gendata --out datasets/set.jsonl --n 2000 [--seed 42] [--injection-ratio 0.3]
-  go run . bench    --dataset datasets/set.jsonl --out results/name.json [--nodes 1] [flags...]
+  go run . gendata --out datasets/load-smoke.jsonl --n 2000 [--seed 42]
+  go run . bench    --dataset /path/to/PromptShield/test.json --out results/name.json [--nodes 1]
   go run . compare  --baseline results/a.json --distributed results/b.json
 
-Run "go run . <command> -h" for the full flag list of that command.
-See README.md for a walkthrough and what the "distributed" simulation does and does not model.`)
+Prerequisite: prompt-shield sidecar at http://localhost:8081
+Defaults: detector=prompt-shield, chunker=token, chunk-size=256, overlap=0
+
+Run "go run . <command> -h" for flags. See README.md.`)
 }

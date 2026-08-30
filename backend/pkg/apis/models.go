@@ -119,6 +119,12 @@ type WorkerHeartbeat struct {
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 }
 
+type UpdateWorkerRequest struct {
+	Hostname *string                `json:"hostname,omitempty"`
+	Site     *string                `json:"site,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -200,4 +206,45 @@ type EvaluationReport struct {
 	TPRAtTargetFPR  map[string]float64 `json:"tpr_at_target_fpr"`
 	Threshold       float64            `json:"threshold"`
 	Samples         int                `json:"samples"`
+}
+
+type PolicyView struct {
+	ID                string  `json:"id,omitempty"`
+	Name              string  `json:"name"`
+	Kind              string  `json:"kind"`
+	Threshold         float64 `json:"threshold"`
+	ActionOnDetection string  `json:"action_on_detection"`
+	Chunker           string  `json:"chunker"`
+	ChunkSize         int     `json:"chunk_size"`
+	ChunkOverlap      int     `json:"chunk_overlap"`
+	IsDefault         bool    `json:"is_default"`
+	Status            string  `json:"status,omitempty"`
+}
+
+type CreatePolicyRequest struct {
+	Name              string  `json:"name"`
+	Threshold         float64 `json:"threshold"`
+	ActionOnDetection string  `json:"action_on_detection"`
+	Chunker           string  `json:"chunker"`
+	ChunkSize         int     `json:"chunk_size"`
+	ChunkOverlap      int     `json:"chunk_overlap"`
+	IsDefault         bool    `json:"is_default"`
+}
+
+type UpdatePolicyRequest struct {
+	Name              *string  `json:"name,omitempty"`
+	Threshold         *float64 `json:"threshold,omitempty"`
+	ActionOnDetection *string  `json:"action_on_detection,omitempty"`
+	Chunker           *string  `json:"chunker,omitempty"`
+	ChunkSize         *int     `json:"chunk_size,omitempty"`
+	ChunkOverlap      *int     `json:"chunk_overlap,omitempty"`
+	IsDefault         *bool    `json:"is_default,omitempty"`
+}
+
+type RuntimeSettingsView struct {
+	DefaultDetector string `json:"default_detector"`
+	FailMode        string `json:"fail_mode"`
+	Chunker         string `json:"chunker"`
+	ChunkSize       int    `json:"chunk_size"`
+	ChunkOverlap    int    `json:"chunk_overlap"`
 }

@@ -31,7 +31,8 @@ func BootstrapContext(ctx context.Context, pool *pgxpool.Pool, settings *config.
 		}
 	}
 
-	if err := policies.EnsureDefault(ctx, settings.DefaultSecurityPolicy, settings.DefaultThreshold); err != nil {
+	if err := policies.EnsureDefault(ctx, settings.DefaultSecurityPolicy, settings.DefaultThreshold,
+		settings.Chunker, settings.ChunkSize, settings.ChunkOverlap); err != nil {
 		return fmt.Errorf("bootstrap policy: %w", err)
 	}
 	return nil
