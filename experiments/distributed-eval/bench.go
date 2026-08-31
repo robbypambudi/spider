@@ -14,7 +14,7 @@ func runBench(args []string) error {
 	dataset := fs.String("dataset", "", "path to Prompt-Shield JSON array or JSONL (required)")
 	out := fs.String("out", "", "path to write the JSON result report (required)")
 	detector := fs.String("detector", defaultDetector, "detector (must be prompt-shield)")
-	threshold := fs.Float64("threshold", 0.05, "decision threshold for reporting (score >= threshold => predicted injection); TPR@FPR uses ROC sweep")
+	threshold := fs.Float64("threshold", 0.5, "decision threshold for reporting (score >= threshold => predicted injection); TPR@FPR uses ROC sweep")
 	chunker := fs.String("chunker", defaultChunker, "chunker (must be token)")
 	chunkSize := fs.Int("chunk-size", defaultChunkSize, "token window size W (lab default 256)")
 	chunkOverlap := fs.Int("chunk-overlap", defaultChunkOverlap, "token overlap O (lab wave-1 default 0)")
