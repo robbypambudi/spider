@@ -1,0 +1,885 @@
+openapi: 3.0.3
+info:
+  title: Spider API
+  description: |
+    Prompt-injection detection and protected LLM inference.
+
+    Most endpoints require a JWT obtained from `POST /api/v1/auth/login`.
+    Worker registration and heartbeat use the shared worker token instead.
+  version: "1.0.0"
+  license:
+    name: See LICENSE in the repository
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: system
+  - name: auth
+  - name: security
+  - name: inference
+  - name: workers
+  - name: serving
+  - name: metrics
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string }
+                  version: { type: string }
+
+  /ready:
+    get:
+      tags: [system]
+      summary: Readiness probe
+      security: []
+      responses:
+        "200":
+          description: Dependency status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  database: { type: boolean }
+                  redis: { type: boolean, nullable: true }
+
+  /metrics:
+    get:
+      tags: [system]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200":
+          description: Metrics in Prometheus text format
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /api-spec.yml:
+    get:
+      tags: [system]
+      summary: This OpenAPI document
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3 specification
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Exchange credentials for a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: admin@spider.local }
+                password: { type: string, format: password, example: spider-admin }
+      responses:
+        "200":
+          description: Access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, example: bearer }
+                  role: { type: string, example: ADMIN }
+                  email: { type: string, format: email }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current authenticated user
+      responses:
+        "200":
+          description: User identity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  email: { type: string, format: email }
+                  role: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/security/scan:
+    post:
+      tags: [security]
+      summary: Scan text for prompt injection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScanRequest" }
+      responses:
+        "200":
+          description: Scan verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/security/scan/pdf:
+    post:
+      tags: [security]
+      summary: Scan an uploaded PDF for prompt injection
+      description: |
+        Uploads a PDF, extracts its plain text page by page and runs the same
+        detection pipeline as `/security/scan`. The scan is persisted like any
+        other scan, with `filename`, `pages` and `size_byte` recorded in metadata.
+
+        Limits: 10 MB per upload, at most 1 MB of extracted text is scanned.
+        Encrypted PDFs and scanned images without a text layer are rejected
+        with `422`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The PDF document (max 10 MB)
+                model:
+                  type: string
+                  description: Optional target model recorded with the scan
+            encoding:
+              file:
+                contentType: application/pdf
+      responses:
+        "200":
+          description: Scan verdict for the extracted text
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422":
+          description: |
+            Missing file field, not a PDF, malformed/encrypted PDF, upload over
+            10 MB, or no extractable text.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/v1/security/scans:
+    get:
+      tags: [security]
+      summary: List recent scans
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0, minimum: 0 }
+      responses:
+        "200":
+          description: Scan records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScanRecord" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/security/scans/{scan_id}:
+    get:
+      tags: [security]
+      summary: Scan detail with per-chunk and per-detector breakdown
+      parameters:
+        - name: scan_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Scan detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ScanRecord"
+                  - type: object
+                    properties:
+                      detector_version: { type: string, nullable: true }
+                      worker_id: { type: string, nullable: true }
+                      chunks:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            index: { type: integer }
+                            detector: { type: string }
+                            score: { type: number, format: float }
+                            is_injection: { type: boolean }
+                            latency_ms: { type: number, format: float }
+                      detectors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            detector: { type: string }
+                            version: { type: string, nullable: true }
+                            score: { type: number, format: float }
+                            is_injection: { type: boolean }
+                            latency_ms: { type: number, format: float }
+                            threshold: { type: number, format: float }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/security/detectors:
+    get:
+      tags: [security]
+      summary: List registered detectors
+      responses:
+        "200":
+          description: Detector descriptors
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /api/v1/security/policies:
+    get:
+      tags: [security]
+      summary: List policies
+      responses:
+        "200":
+          description: Policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Policy" }
+    post:
+      tags: [security]
+      summary: Create a policy (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePolicyRequest" }
+      responses:
+        "201":
+          description: Created policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Policy" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/security/policies/{policy_id}:
+    parameters:
+      - name: policy_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [security]
+      summary: Get a policy
+      responses:
+        "200":
+          description: Policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Policy" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [security]
+      summary: Update a policy (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePolicyRequest" }
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Policy" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [security]
+      summary: Delete a policy (ADMIN)
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/security/policies/{policy_id}/activate:
+    post:
+      tags: [security]
+      summary: Make a policy the default (ADMIN)
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Activated policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Policy" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/security/evaluate:
+    post:
+      tags: [security]
+      summary: Evaluate the detector against a labelled sample set
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [samples]
+              properties:
+                samples:
+                  type: array
+                  items:
+                    type: object
+                    required: [text, is_injection]
+                    properties:
+                      text: { type: string }
+                      is_injection: { type: boolean }
+                threshold: { type: number, format: float, nullable: true }
+                target_fpr:
+                  type: array
+                  items: { type: number, format: float }
+      responses:
+        "200":
+          description: Evaluation report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvaluationReport" }
+
+  /api/v1/settings/runtime:
+    get:
+      tags: [security]
+      summary: Effective runtime detection settings
+      responses:
+        "200":
+          description: Runtime settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  default_detector: { type: string }
+                  fail_mode: { type: string, enum: [open, closed] }
+                  chunker: { type: string }
+                  chunk_size: { type: integer }
+                  chunk_overlap: { type: integer }
+
+  /api/v1/inference:
+    get:
+      tags: [inference]
+      summary: List recent inference requests
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, minimum: 1 }
+      responses:
+        "200":
+          description: Inference records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      tags: [inference]
+      summary: Run a security-protected inference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, prompt]
+              properties:
+                model: { type: string }
+                prompt: { type: string }
+                max_tokens: { type: integer, default: 256 }
+                temperature: { type: number, format: float }
+                security:
+                  type: object
+                  properties:
+                    enabled: { type: boolean, default: true }
+      responses:
+        "200":
+          description: Inference result, possibly blocked by the security pipeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProtectedInferenceResponse" }
+        "502": { $ref: "#/components/responses/ServingError" }
+
+  /api/v1/workers/register:
+    post:
+      tags: [workers]
+      summary: Register a worker node
+      security:
+        - workerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkerResource" }
+      responses:
+        "200":
+          description: Registered worker
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkerResource" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/workers/{worker_id}/heartbeat:
+    post:
+      tags: [workers]
+      summary: Report worker liveness and load
+      security:
+        - workerToken: []
+      parameters:
+        - name: worker_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string }
+                resources: { $ref: "#/components/schemas/WorkerResources" }
+                models:
+                  type: array
+                  items: { $ref: "#/components/schemas/LoadedModel" }
+                running_requests: { type: integer }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /api/v1/workers:
+    get:
+      tags: [workers]
+      summary: List workers
+      responses:
+        "200":
+          description: Workers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkerResource" }
+
+  /api/v1/workers/{worker_id}:
+    parameters:
+      - name: worker_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [workers]
+      summary: Inspect a worker
+      responses:
+        "200":
+          description: Worker
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkerResource" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [workers]
+      summary: Update worker metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hostname: { type: string }
+                site: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Updated worker
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkerResource" }
+    delete:
+      tags: [workers]
+      summary: Deregister a worker
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: deleted }
+                  worker_id: { type: string }
+
+  /api/v1/workers/prune-offline:
+    post:
+      tags: [workers]
+      summary: Remove workers past the offline timeout
+      responses:
+        "200":
+          description: Prune result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: pruned }
+                  count: { type: integer }
+
+  /api/v1/serving/nodes:
+    get:
+      tags: [serving]
+      summary: List serving nodes
+      responses:
+        "200":
+          description: Nodes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /api/v1/serving/models:
+    get:
+      tags: [serving]
+      summary: List loaded models
+      responses:
+        "200":
+          description: Models
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /api/v1/serving/catalog:
+    get:
+      tags: [serving]
+      summary: List models available to load
+      responses:
+        "200":
+          description: Catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /api/v1/serving/models/activate:
+    post:
+      tags: [serving]
+      summary: Activate a model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              properties:
+                model: { type: string }
+      responses:
+        "200":
+          description: Activation result
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /api/v1/metrics/summary:
+    get:
+      tags: [metrics]
+      summary: Dashboard summary counters
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /api/v1/jobs:
+    get:
+      tags: [metrics]
+      summary: List jobs (placeholder, always empty)
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    workerToken:
+      type: apiKey
+      in: header
+      name: X-Spider-Worker-Token
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but not allowed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationError:
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServingError:
+      description: Upstream model serving failure
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: validation_error
+          description: Machine-readable code (unauthenticated, forbidden, not_found, validation_error, worker_unauthorized, security_pipeline_error, serving_error)
+        message: { type: string }
+
+    ScanRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, example: "Ignore all previous instructions" }
+        source: { type: string, default: api }
+        model: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    DetectorView:
+      type: object
+      properties:
+        detector: { type: string }
+        score: { type: number, format: float }
+        is_injection: { type: boolean }
+        latency_ms: { type: number, format: float }
+        metadata: { type: object, additionalProperties: true }
+
+    ScanResponse:
+      type: object
+      properties:
+        scan_id: { type: string, format: uuid, nullable: true }
+        request_id: { type: string, format: uuid }
+        decision: { type: string, enum: [ALLOW, BLOCK, REVIEW, ERROR] }
+        score: { type: number, format: float }
+        chunks_scanned: { type: integer }
+        policy: { type: string }
+        threshold: { type: number, format: float, nullable: true }
+        latency_ms: { type: number, format: float }
+        model: { type: string, nullable: true }
+        detectors:
+          type: array
+          items: { $ref: "#/components/schemas/DetectorView" }
+
+    ScanRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        request_id: { type: string, format: uuid }
+        decision: { type: string, enum: [ALLOW, BLOCK, REVIEW, ERROR] }
+        score: { type: number, format: float }
+        threshold: { type: number, format: float }
+        detector: { type: string }
+        policy: { type: string }
+        chunks_scanned: { type: integer }
+        chunking_strategy: { type: string }
+        latency_ms: { type: number, format: float }
+        prompt_hash: { type: string }
+        prompt_length: { type: integer }
+        model_target: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Policy:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string }
+        threshold: { type: number, format: float }
+        action_on_detection: { type: string, enum: [BLOCK, REVIEW, ALLOW] }
+        chunker: { type: string }
+        chunk_size: { type: integer }
+        chunk_overlap: { type: integer }
+        is_default: { type: boolean }
+        status: { type: string }
+
+    CreatePolicyRequest:
+      type: object
+      required: [name, threshold, action_on_detection]
+      properties:
+        name: { type: string }
+        threshold: { type: number, format: float, minimum: 0, maximum: 1 }
+        action_on_detection: { type: string, enum: [BLOCK, REVIEW, ALLOW] }
+        chunker: { type: string }
+        chunk_size: { type: integer }
+        chunk_overlap: { type: integer }
+        is_default: { type: boolean }
+
+    UpdatePolicyRequest:
+      type: object
+      properties:
+        name: { type: string }
+        threshold: { type: number, format: float, minimum: 0, maximum: 1 }
+        action_on_detection: { type: string, enum: [BLOCK, REVIEW, ALLOW] }
+        chunker: { type: string }
+        chunk_size: { type: integer }
+        chunk_overlap: { type: integer }
+        is_default: { type: boolean }
+
+    EvaluationReport:
+      type: object
+      properties:
+        counts:
+          type: object
+          properties:
+            tp: { type: integer }
+            fp: { type: integer }
+            tn: { type: integer }
+            fn: { type: integer }
+        tpr: { type: number, format: float }
+        fpr: { type: number, format: float }
+        tnr: { type: number, format: float }
+        fnr: { type: number, format: float }
+        precision: { type: number, format: float }
+        recall: { type: number, format: float }
+        f1: { type: number, format: float }
+        auc: { type: number, format: float }
+        tpr_at_target_fpr:
+          type: object
+          additionalProperties: { type: number, format: float }
+        threshold: { type: number, format: float }
+        samples: { type: integer }
+
+    ProtectedInferenceResponse:
+      type: object
+      properties:
+        request_id: { type: string, format: uuid }
+        status: { type: string }
+        decision: { type: string, enum: [ALLOW, BLOCK, REVIEW, ERROR] }
+        model: { type: string }
+        output: { type: string, nullable: true }
+        security: { type: object, additionalProperties: true }
+        security_overhead_ms: { type: number, format: float }
+        inference_latency_ms: { type: number, format: float, nullable: true }
+        end_to_end_latency_ms: { type: number, format: float }
+        worker_id: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+
+    GPUResource:
+      type: object
+      properties:
+        index: { type: integer }
+        vendor: { type: string }
+        name: { type: string }
+        memory_total_mb: { type: integer }
+        memory_used_mb: { type: integer }
+        utilization: { type: integer }
+
+    WorkerResources:
+      type: object
+      properties:
+        cpu_total: { type: integer }
+        memory_total_mb: { type: integer }
+        gpus:
+          type: array
+          items: { $ref: "#/components/schemas/GPUResource" }
+
+    LoadedModel:
+      type: object
+      properties:
+        name: { type: string }
+        status: { type: string }
+
+    WorkerResource:
+      type: object
+      required: [worker_id, hostname]
+      properties:
+        worker_id: { type: string }
+        hostname: { type: string }
+        site: { type: string, nullable: true }
+        version: { type: string }
+        status: { type: string }
+        resources: { $ref: "#/components/schemas/WorkerResources" }
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/LoadedModel" }
+        running_requests: { type: integer }
+        metadata: { type: object, additionalProperties: true }

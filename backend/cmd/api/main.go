@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/spider/spider/dao"
+	"github.com/spider/spider/docs"
 	"github.com/spider/spider/internal/app"
 	"github.com/spider/spider/internal/handler"
 	"github.com/spider/spider/internal/middleware"
@@ -75,6 +76,7 @@ func main() {
 		handler.WriteJSON(w, http.StatusOK, monitor.ReadinessStatus{Status: status, Database: dbOK, Redis: nil})
 	})
 	r.Handle("/metrics", container.Metrics.Handler())
+	docs.Mount(r)
 
 	r.Route("/api/v1", func(api chi.Router) {
 		handler.MountAPI(api, container)
