@@ -25,6 +25,7 @@ func MountAPI(r chi.Router, c *app.Container) {
 	r.With(authMW).Get("/auth/me", meHandler())
 
 	r.With(authMW).Post("/security/scan", scanHandler(c))
+	r.With(authMW).Post("/security/scan/pdf", scanPDFHandler(c))
 	r.With(authMW).Get("/security/scans", listScansHandler(c))
 	r.With(authMW).Get("/security/scans/{scan_id}", getScanHandler(c))
 	r.With(authMW).Get("/security/detectors", listDetectorsHandler(c))
