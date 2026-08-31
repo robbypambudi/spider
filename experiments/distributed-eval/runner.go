@@ -53,6 +53,7 @@ type job struct {
 
 type NodeBreakdown struct {
 	NodeID   int     `json:"node_id"`
+	Endpoint string  `json:"endpoint,omitempty"` // set in remote-http mode (see remote_runner.go)
 	Requests int     `json:"requests"`
 	BusyMs   float64 `json:"busy_ms"`
 }

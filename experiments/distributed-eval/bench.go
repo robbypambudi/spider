@@ -22,11 +22,13 @@ func runBench(args []string) error {
 	promptShieldEndpoint := fs.String("prompt-shield-endpoint", defaultPromptShieldEndpoint, "Prompt-Shield sidecar URL")
 	promptShieldModel := fs.String("prompt-shield-model", defaultPromptShieldModel, "Hugging Face model id (e.g. robbypambudi/prompt-shield-flan-t5-small)")
 
-	nodes := fs.Int("nodes", 1, "number of simulated nodes (1 = single-node baseline)")
-	strategy := fs.String("strategy", "least-loaded", "dispatch strategy when nodes > 1: least-loaded | round-robin")
+	nodes := fs.Int("nodes", 1, "number of simulated nodes (1 = single-node baseline); ignored when --node-endpoints is set")
+	strategy := fs.String("strategy", "least-loaded", "dispatch strategy when >1 node: least-loaded | round-robin")
 	concurrency := fs.Int("concurrency-per-node", 4, "concurrent goroutines per node (simulates concurrent clients hitting that node)")
 	repeat := fs.Int("repeat", 1, "replay the dataset this many times, to inflate a small dataset into a sustained-load run")
 	targetFPRs := fs.String("target-fpr", defaultTargetFPR, "comma-separated target FPRs for TPR@FPR reporting")
+	nodeEndpoints := fs.String("node-endpoints", "", "comma-separated http://host:port list of real detector-node instances (e.g. Docker containers with their own --cpus/--memory). When set, requests are dispatched over real HTTP instead of the in-process simulation — see docker-compose.eval.yml")
+	limit := fs.Int("limit", 0, "use only the first N rows of --dataset (0 = use all). For trimming a large real dataset down to a manageable run — never a substitute for real data.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -55,6 +57,9 @@ func runBench(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *limit > 0 && *limit < len(samples) {
+		samples = samples[:*limit]
+	}
 
 	cfg := BenchConfig{
 		DatasetPath:          *dataset,
@@ -73,7 +78,13 @@ func runBench(args []string) error {
 		TargetFPRs:           fprs,
 	}
 
-	result, err := runBenchmark(cfg, samples)
+	var result *BenchResult
+	if *nodeEndpoints != "" {
+		endpoints := parseStringList(*nodeEndpoints)
+		result, err = runRemoteBenchmark(cfg, endpoints, samples)
+	} else {
+		result, err = runBenchmark(cfg, samples)
+	}
 	if err != nil {
 		return err
 	}
@@ -84,6 +95,18 @@ func runBench(args []string) error {
 	printSummary(result)
 	fmt.Printf("\nsaved: %s\n", *out)
 	return nil
+}
+
+func parseStringList(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func parseFloatList(s string) ([]float64, error) {

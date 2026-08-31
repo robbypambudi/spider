@@ -22,6 +22,7 @@ type Settings struct {
 	DefaultSecurityPolicy   string
 	DefaultThreshold        float64
 	FailMode                string
+	AuditStoreMode          string
 	LogPromptContent        bool
 	PersistPromptContent    bool
 	WorkerHeartbeatInterval int
@@ -55,6 +56,7 @@ func Load() (*Settings, error) {
 		DefaultSecurityPolicy:   getEnv("SPIDER_DEFAULT_SECURITY_POLICY", "threshold"),
 		DefaultThreshold:        getEnvFloat("SPIDER_DEFAULT_THRESHOLD", 0.5),
 		FailMode:                getEnv("SPIDER_FAIL_MODE", "closed"),
+		AuditStoreMode:          getEnv("SPIDER_AUDIT_STORE_MODE", "blocked_only"),
 		LogPromptContent:        getEnvBool("SPIDER_LOG_PROMPT_CONTENT", false),
 		PersistPromptContent:    getEnvBool("SPIDER_PERSIST_PROMPT_CONTENT", false),
 		WorkerHeartbeatInterval: getEnvInt("SPIDER_WORKER_HEARTBEAT_INTERVAL", 10),

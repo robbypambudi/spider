@@ -1,0 +1,119 @@
+# Controlled-resource evaluation cluster: 4 detector-node instances, each
+# paired with its own prompt-shield sidecar, all with explicit --cpus/
+# --memory limits — so throughput/latency/fairness numbers reflect real,
+# OS-enforced (cgroup) resource constraints instead of spider-bench's
+# in-process goroutine simulation (see ../README.md).
+#
+# "Baseline" = node-1 alone. "Distributed" = all 4 nodes. Same image, same
+# per-node resource limits either way — the only variable is node count,
+# which is the whole point of the comparison.
+#
+# Detector/chunker are fixed to prompt-shield + token (256/0) — the same
+# methodology as spider-internal/labs/eval_chunked.py and labdefaults.go.
+# This harness does not offer a rule-based/synthetic-data mode: run it
+# against a real spider-internal evaluation dataset (see run-docker-eval.sh
+# --dataset), trimming with spider-bench's --limit if it's too large to run
+# quickly — never by substituting fake data.
+#
+# First build downloads prompt-shield's Python deps + the Flan-T5 model,
+# which can take several minutes; Docker's build cache makes every run after
+# that fast.
+#
+#   docker compose -f docker-compose.eval.yml up -d --build
+#
+# Adjust `cpus`/`mem_limit` below to whatever "controlled" means for your
+# experiment — just keep every node-N identical so the comparison stays fair.
+
+x-node-resources: &node-resources
+  cpus: "1.0"
+  mem_limit: "1g"
+
+x-shield-resources: &shield-resources
+  cpus: "2.0"
+  mem_limit: "3g"
+
+x-node-env: &node-env
+  DETECTOR: prompt-shield
+  CHUNKER: token
+  CHUNK_SIZE: "256"
+  CHUNK_OVERLAP: "0"
+  THRESHOLD: ${THRESHOLD:-0.5}
+  PORT: "9000"
+  PROMPT_SHIELD_MODEL: ${PROMPT_SHIELD_MODEL:-robbypambudi/prompt-shield-flan-t5-small}
+
+services:
+  shield-1:
+    build: { context: ../.., dockerfile: deployments/docker/Dockerfile.prompt-shield }
+    <<: *shield-resources
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+  node-1:
+    build: { context: ../.., dockerfile: experiments/distributed-eval/docker/Dockerfile.detector-node }
+    environment:
+      <<: *node-env
+      NODE_ID: node-1
+      PROMPT_SHIELD_ENDPOINT: http://shield-1:8081
+    ports: ["9001:9000"]
+    <<: *node-resources
+    depends_on: [shield-1]
+
+  shield-2:
+    build: { context: ../.., dockerfile: deployments/docker/Dockerfile.prompt-shield }
+    <<: *shield-resources
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+  node-2:
+    build: { context: ../.., dockerfile: experiments/distributed-eval/docker/Dockerfile.detector-node }
+    environment:
+      <<: *node-env
+      NODE_ID: node-2
+      PROMPT_SHIELD_ENDPOINT: http://shield-2:8081
+    ports: ["9002:9000"]
+    <<: *node-resources
+    depends_on: [shield-2]
+
+  shield-3:
+    build: { context: ../.., dockerfile: deployments/docker/Dockerfile.prompt-shield }
+    <<: *shield-resources
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+  node-3:
+    build: { context: ../.., dockerfile: experiments/distributed-eval/docker/Dockerfile.detector-node }
+    environment:
+      <<: *node-env
+      NODE_ID: node-3
+      PROMPT_SHIELD_ENDPOINT: http://shield-3:8081
+    ports: ["9003:9000"]
+    <<: *node-resources
+    depends_on: [shield-3]
+
+  shield-4:
+    build: { context: ../.., dockerfile: deployments/docker/Dockerfile.prompt-shield }
+    <<: *shield-resources
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+  node-4:
+    build: { context: ../.., dockerfile: experiments/distributed-eval/docker/Dockerfile.detector-node }
+    environment:
+      <<: *node-env
+      NODE_ID: node-4
+      PROMPT_SHIELD_ENDPOINT: http://shield-4:8081
+    ports: ["9004:9000"]
+    <<: *node-resources
+    depends_on: [shield-4]

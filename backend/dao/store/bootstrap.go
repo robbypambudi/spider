@@ -35,5 +35,16 @@ func BootstrapContext(ctx context.Context, pool *pgxpool.Pool, settings *config.
 		settings.Chunker, settings.ChunkSize, settings.ChunkOverlap); err != nil {
 		return fmt.Errorf("bootstrap policy: %w", err)
 	}
+
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS scan_metrics_counters (
+			decision VARCHAR(32) PRIMARY KEY,
+			count BIGINT NOT NULL DEFAULT 0,
+			total_latency_ms DOUBLE PRECISION NOT NULL DEFAULT 0.0
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("bootstrap scan_metrics_counters: %w", err)
+	}
 	return nil
 }

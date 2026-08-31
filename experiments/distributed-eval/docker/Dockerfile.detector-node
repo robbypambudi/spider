@@ -1,0 +1,16 @@
+# Build context must be the repo root (see docker-compose.eval.yml) — this
+# image needs both backend/ (pkg/security/*) and experiments/distributed-eval/
+# (cmd/detector-node, via its go.mod replace directive).
+FROM golang:1.23-alpine AS builder
+WORKDIR /src
+COPY backend/ backend/
+COPY experiments/distributed-eval/ experiments/distributed-eval/
+WORKDIR /src/experiments/distributed-eval
+RUN CGO_ENABLED=0 go build -trimpath -o /out/detector-node ./cmd/detector-node
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates wget
+WORKDIR /app
+COPY --from=builder /out/detector-node /app/detector-node
+EXPOSE 9000
+ENTRYPOINT ["/app/detector-node"]

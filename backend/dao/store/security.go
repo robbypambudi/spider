@@ -198,10 +198,62 @@ func (r *SecurityRepo) DetectorExecutions(ctx context.Context, scanID uuid.UUID)
 	return out, rows.Err()
 }
 
+func (r *SecurityRepo) RecordScanMetric(ctx context.Context, decision string, latencyMs float64) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO scan_metrics_counters (decision, count, total_latency_ms)
+		VALUES ($1, 1, $2)
+		ON CONFLICT (decision) DO UPDATE
+		SET count = scan_metrics_counters.count + 1,
+		    total_latency_ms = scan_metrics_counters.total_latency_ms + EXCLUDED.total_latency_ms
+	`, decision, latencyMs)
+	return err
+}
+
 func (r *SecurityRepo) SummaryCounts(ctx context.Context) (map[string]interface{}, error) {
+	// Try aggregate counters table first for zero-loss telemetry
+	rows, err := r.pool.Query(ctx, `SELECT decision, count, total_latency_ms FROM scan_metrics_counters`)
+	if err == nil {
+		defer rows.Close()
+		var total, allowed, blocked, review int64
+		var totalLatency float64
+		hasData := false
+		for rows.Next() {
+			var dec string
+			var cnt int64
+			var lat float64
+			if err := rows.Scan(&dec, &cnt, &lat); err == nil {
+				hasData = true
+				total += cnt
+				totalLatency += lat
+				switch dec {
+				case "ALLOW":
+					allowed += cnt
+				case "BLOCK":
+					blocked += cnt
+				case "REVIEW":
+					review += cnt
+				}
+			}
+		}
+		if hasData {
+			avgLatency := 0.0
+			if total > 0 {
+				avgLatency = totalLatency / float64(total)
+			}
+			return map[string]interface{}{
+				"total_scans":              int(total),
+				"allowed":                  int(allowed),
+				"blocked":                  int(blocked),
+				"review":                   int(review),
+				"avg_detection_latency_ms": avgLatency,
+			}, nil
+		}
+	}
+
+	// Fallback to querying security_scans table if counters table is not yet populated
 	var total, allowed, blocked, review int
 	var avgLatency float64
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM security_scans`).Scan(&total)
+	err = r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM security_scans`).Scan(&total)
 	if err != nil {
 		return nil, err
 	}

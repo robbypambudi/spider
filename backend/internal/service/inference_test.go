@@ -33,6 +33,10 @@ func (f *fakeSecurityScanStore) CreateFromResult(_ context.Context, result apis.
 	return &store.SecurityScan{ID: uuid.New(), RequestID: id}, nil
 }
 
+func (f *fakeSecurityScanStore) RecordScanMetric(_ context.Context, _ string, _ float64) error {
+	return nil
+}
+
 type fakeInferenceStore struct{}
 
 func (f *fakeInferenceStore) Create(_ context.Context, p store.CreateInferenceParams) (*store.InferenceRecord, error) {

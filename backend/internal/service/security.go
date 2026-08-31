@@ -78,19 +78,28 @@ func (s *SecurityService) Inspect(ctx context.Context, text string, opts Inspect
 		detectorLatency = result.DetectorResults[0].LatencyMs
 	}
 	s.Metrics.ObserveScan(string(result.Decision), result.TotalLatencyMs, result.ChunksScanned, detectorName, result.Score, detectorLatency)
+	_ = s.Scans.RecordScanMetric(ctx, string(result.Decision), result.TotalLatencyMs)
 
 	var scan *store.SecurityScan
 	if opts.Persist {
-		var promptText *string
-		if s.Settings.PersistPromptContent {
-			promptText = &text
+		shouldPersist := true
+		if s.Settings != nil && s.Settings.AuditStoreMode != "all" {
+			// In blocked_only mode (default), only persist threat incidents (BLOCK, REVIEW, ERROR)
+			shouldPersist = result.Decision != apis.DecisionAllow
 		}
-		stored, err := s.Scans.CreateFromResult(ctx, result, digest, len(text), promptText, opts.UserID, opts.WorkerID)
-		if err != nil {
-			return result, nil, err
+
+		if shouldPersist {
+			var promptText *string
+			if s.Settings != nil && s.Settings.PersistPromptContent {
+				promptText = &text
+			}
+			stored, err := s.Scans.CreateFromResult(ctx, result, digest, len(text), promptText, opts.UserID, opts.WorkerID)
+			if err != nil {
+				return result, nil, err
+			}
+			scan = stored
+			slog.Info("security_scan_persisted", "scan_id", scan.ID.String(), "request_id", result.RequestID, "decision", result.Decision)
 		}
-		scan = stored
-		slog.Info("security_scan_persisted", "scan_id", scan.ID.String(), "request_id", result.RequestID)
 	}
 	return result, scan, nil
 }

@@ -105,15 +105,39 @@ Angka TPR@FPR bandingkan dengan tabel paper (FLAN-T5-small: AUC ~0.942, TPR@FPR 
 | `--strategy` | `least-loaded` | `least-loaded` \| `round-robin` |
 | `--concurrency-per-node` | `4` | goroutine per node |
 | `--repeat` | `1` | ulangi dataset untuk load test |
+| `--node-endpoints` | *(kosong)* | comma-separated `http://host:port` — kalau diisi, request di-dispatch lewat HTTP asli ke instance `detector-node` sungguhan (lihat bagian Docker di bawah), **bukan** simulasi in-process. `--nodes` diabaikan; jumlah node = jumlah endpoint. |
+| `--limit` | `0` (semua) | pakai N baris pertama saja dari `--dataset` — buat memotong dataset **asli** yang kebesaran, bukan pengganti data asli |
 
 `rule-based` dan `fixed` chunker **sengaja ditolak** — gunakan pipeline ML yang sama dengan lab.
 
-## Simulasi vs cluster nyata
+## Simulasi in-process vs Docker (CPU/memory terkontrol nyata)
 
-Lihat bagian sebelumnya di README asli: goroutine in-process, bukan mesin terpisah; satu sidecar endpoint untuk semua node simulasi. Throughput distributed = upper-bound dispatch, bukan klaim multi-GPU ML.
+Mode default (`--nodes N`, tanpa `--node-endpoints`) tetap simulasi goroutine in-process — cepat untuk iterasi, tapi CPU/memory yang dilaporkan cuma proxy busy-time, bukan angka OS asli (lihat catatan lama di bawah).
+
+Untuk evaluasi yang bisa dipertanggungjawabkan sebagai "distributed" — CPU, memory, dan jaringan **sungguhan terkontrol** — pakai `cmd/detector-node` + `docker-compose.eval.yml`:
+
+- **`cmd/detector-node`**: HTTP server tipis yang membungkus pipeline SPIDER asli (`pkg/security/pipeline`). Endpoint: `POST /detect`, `GET /health`, `GET /stats`.
+- **`docker-compose.eval.yml`**: 4 pasang container `shield-N` (sidecar Prompt-Shield asli) + `node-N` (detector-node), masing-masing dengan `cpus`/`mem_limit` eksplisit dan **identik** (default 1 CPU / 1GB per node, 2 CPU / 3GB per sidecar — sesuaikan di file, yang penting semua node-N sama supaya perbandingan adil). "Baseline" = `node-1` sendirian; "distributed" = keempatnya. Detector/chunker **dikunci** ke `prompt-shield` + `token` (256/0) di compose file — tidak ada mode rule-based/sintetis di jalur ini, sesuai metodologi lab.
+- **`scripts/run-docker-eval.sh`**: orkestrasi penuh — build+up compose, tunggu health check tiap node, jalankan `spider-bench bench` baseline lalu distributed lewat `--node-endpoints` asli, ambil snapshot `docker stats` (CPU%/MemUsage **nyata**, cgroup-enforced) per container, lalu `compare`.
+
+```bash
+cd experiments/distributed-eval
+./scripts/run-docker-eval.sh --dataset "/path/ke/spider-internal/labs/PromptShield/test.json"
+```
+
+Dataset **wajib** dari `spider-internal/labs` yang sama dipakai untuk testing (`PromptShield/test.json` atau camera-ready benchmark) — bukan `datasets/injection-bench-*.jsonl` sintetis (itu hanya untuk load/smoke, lihat komentar di `dataset.go`). Kalau dataset asli terlalu besar untuk satu run cepat, potong dengan `--limit N` di script (ambil N baris pertama dari data **asli**), bukan ganti ke data buatan sendiri:
+
+```bash
+./scripts/run-docker-eval.sh --dataset "/path/ke/PromptShield/test.json" --limit 3000
+```
+
+Sudah divalidasi end-to-end (build image, jalankan container dengan `--cpus`/`--memory` sungguhan, `/health` `/detect` `/stats` semua benar, dan dispatch HTTP dari `spider-bench` ke container asli — latency network asli ikut terukur, bukan cuma waktu proses). Yang **belum** saya jalankan penuh dalam sesi ini: pull image Python + download model Flan-T5 untuk `shield-N` (butuh waktu/bandwidth signifikan) — jalankan sendiri saat setup, first build akan makan beberapa menit, run berikutnya cepat karena Docker build cache.
+
+## Simulasi vs cluster nyata (mode in-process, tanpa Docker)
+
+Goroutine in-process, bukan mesin terpisah; satu sidecar endpoint untuk semua node simulasi. Throughput distributed = upper-bound dispatch, bukan klaim multi-GPU ML sungguhan. Mode Docker di atas mengatasi sebagian besar keterbatasan ini (proses OS asli, resource limit asli, network asli) — kecuali paralelisasi ML sungguhan (tiap node Docker sudah punya sidecar sendiri, jadi ini justru **sudah** teratasi juga dibanding mode in-process).
 
 ## Going further
 
-- Multi sidecar endpoint per node
-- True chunk-sharding over network
-- CPU% per OS process
+- True chunk-sharding satu dokumen ke banyak node lewat network (bukan request independen ke node berbeda)
+- Failure-injection: matikan satu container `node-N` di tengah run, ukur dampaknya

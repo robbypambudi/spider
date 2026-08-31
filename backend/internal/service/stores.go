@@ -10,6 +10,7 @@ import (
 
 type SecurityScanStore interface {
 	CreateFromResult(ctx context.Context, result apis.SecurityResult, promptHash string, promptLength int, promptText *string, userID *uuid.UUID, workerID *string) (*store.SecurityScan, error)
+	RecordScanMetric(ctx context.Context, decision string, latencyMs float64) error
 }
 
 type InferenceStore interface {
