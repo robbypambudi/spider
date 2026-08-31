@@ -29,6 +29,7 @@ func runBench(args []string) error {
 	targetFPRs := fs.String("target-fpr", defaultTargetFPR, "comma-separated target FPRs for TPR@FPR reporting")
 	nodeEndpoints := fs.String("node-endpoints", "", "comma-separated http://host:port list of real detector-node instances (e.g. Docker containers with their own --cpus/--memory). When set, requests are dispatched over real HTTP instead of the in-process simulation — see docker-compose.eval.yml")
 	limit := fs.Int("limit", 0, "use only the first N rows of --dataset (0 = use all). For trimming a large real dataset down to a manageable run — never a substitute for real data.")
+	httpTimeout := fs.Int("http-timeout-seconds", 60, "per-request timeout for --node-endpoints HTTP calls. Too short silently turns slow-but-correct detections into 'failed' (excluded from classification, see --out's failed_requests) — raise this if you see failed_requests > 0 and node CPU limits are tight")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -76,6 +77,7 @@ func runBench(args []string) error {
 		ConcurrencyPerNode:   *concurrency,
 		Repeat:               *repeat,
 		TargetFPRs:           fprs,
+		HTTPTimeoutSeconds:   *httpTimeout,
 	}
 
 	var result *BenchResult

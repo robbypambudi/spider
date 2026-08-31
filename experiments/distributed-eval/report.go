@@ -48,16 +48,23 @@ func printSummary(r *BenchResult) {
 	fmt.Printf("throughput:        %.1f req/s\n", r.ThroughputRPS)
 	fmt.Printf("latency (ms):      mean=%.2f p50=%.2f p95=%.2f p99=%.2f max=%.2f\n",
 		r.Latency.MeanMs, r.Latency.P50Ms, r.Latency.P95Ms, r.Latency.P99Ms, r.Latency.MaxMs)
+	if r.FailedRequests > 0 {
+		pct := 100 * float64(r.FailedRequests) / float64(r.TotalRequests)
+		fmt.Printf("\n*** %d/%d requests FAILED (%.1f%%) — timed out or errored, EXCLUDED from classification below.\n", r.FailedRequests, r.TotalRequests, pct)
+		fmt.Println("*** If this is nonzero, treat TPR/FPR/AUC with caution: they're computed over fewer samples")
+		fmt.Println("*** than TotalRequests, not because the model missed them. Consider --http-timeout-seconds")
+		fmt.Println("*** if using --node-endpoints, or check node resource limits (see docker-compose.eval.yml).")
+	}
 	fmt.Println()
 	c := r.Classification.Counts
-	fmt.Printf("classification:    TP=%d FP=%d TN=%d FN=%d\n", c.TP, c.FP, c.TN, c.FN)
+	fmt.Printf("classification:    TP=%d FP=%d TN=%d FN=%d (n=%d, excludes %d failed)\n", c.TP, c.FP, c.TN, c.FN, r.Classification.Samples, r.FailedRequests)
 	fmt.Printf("                   TPR=%.4f FPR=%.4f Precision=%.4f F1=%.4f AUC=%.4f\n",
 		r.Classification.TPR, r.Classification.FPR, r.Classification.Precision, r.Classification.F1, r.Classification.AUC)
 	if len(r.NodeBreakdown) > 0 {
 		fmt.Println()
 		fmt.Println("per-node breakdown:")
 		for _, n := range r.NodeBreakdown {
-			fmt.Printf("  node %d: requests=%-6d busy=%.1fms\n", n.NodeID, n.Requests, n.BusyMs)
+			fmt.Printf("  node %d: requests=%-6d failed=%-4d busy=%.1fms\n", n.NodeID, n.Requests, n.Failed, n.BusyMs)
 		}
 		fmt.Printf("fairness (Jain):   by-requests=%.4f  by-busy-time=%.4f  (1.0 = perfectly even, 1/n = maximally skewed)\n",
 			r.FairnessByRequests, r.FairnessByBusyTime)

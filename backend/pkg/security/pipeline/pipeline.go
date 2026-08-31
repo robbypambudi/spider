@@ -119,7 +119,7 @@ func (p *Pipeline) Inspect(ctx context.Context, request apis.SecurityRequest) (r
 	chunks := p.Chunker.Chunk(processed.Text)
 
 	var detectorResults []apis.DetectionResult
-	for _, chunk := range chunks {
+	for idx, chunk := range chunks {
 		result, err := p.Detector.Detect(ctx, chunk.Text)
 		if err != nil {
 			latency := float64(time.Since(start).Microseconds()) / 1000.0
@@ -132,6 +132,16 @@ func (p *Pipeline) Inspect(ctx context.Context, request apis.SecurityRequest) (r
 				Metadata:       map[string]interface{}{"error": err.Error()},
 			}
 		}
+		if result.Metadata == nil {
+			result.Metadata = make(map[string]interface{})
+		}
+		result.Metadata["chunk_index"] = idx
+		result.Metadata["chunk_text"] = chunk.Text
+		snippet := chunk.Text
+		if len(snippet) > 300 {
+			snippet = snippet[:300] + "..."
+		}
+		result.Metadata["snippet"] = snippet
 		detectorResults = append(detectorResults, result)
 	}
 

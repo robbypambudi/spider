@@ -206,10 +206,25 @@ func getScanHandler(c *app.Container) http.HandlerFunc {
 		}
 		detList := make([]map[string]interface{}, 0, len(execs))
 		for _, d := range execs {
-			detList = append(detList, map[string]interface{}{
+			var meta map[string]interface{}
+			_ = json.Unmarshal([]byte(d.MetadataJSON), &meta)
+			entry := map[string]interface{}{
 				"detector": d.Detector, "version": d.DetectorVersion, "score": d.Score,
 				"is_injection": d.IsInjection, "latency_ms": d.LatencyMs, "threshold": d.Threshold,
-			})
+				"metadata": meta,
+			}
+			if meta != nil {
+				if snip, ok := meta["snippet"]; ok {
+					entry["snippet"] = snip
+				}
+				if ct, ok := meta["chunk_text"]; ok {
+					entry["chunk_text"] = ct
+				}
+				if ci, ok := meta["chunk_index"]; ok {
+					entry["chunk_index"] = ci
+				}
+			}
+			detList = append(detList, entry)
 		}
 		WriteJSON(w, http.StatusOK, map[string]interface{}{
 			"id": row.ID.String(), "request_id": row.RequestID.String(),

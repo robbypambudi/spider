@@ -62,6 +62,37 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
+  inspectPDF: async (file: File, model?: string): Promise<ScanResponse> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (model) {
+      formData.append("model", model);
+    }
+    const headers = new Headers();
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const response = await fetch(`${baseUrl}/api/v1/security/scan/pdf`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (response.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      let msg = text;
+      try {
+        const json = JSON.parse(text);
+        if (json.error) msg = json.error;
+      } catch {
+        // use raw text
+      }
+      throw new Error(msg || `PDF scan failed (${response.status})`);
+    }
+    return (await response.json()) as ScanResponse;
+  },
   detectors: () =>
     request<Array<{ name: string; status: string; warning: string }>>("/api/v1/security/detectors"),
   policies: () => request<PolicyView[]>("/api/v1/security/policies"),

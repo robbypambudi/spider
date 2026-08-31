@@ -41,14 +41,30 @@ func runCompare(args []string) error {
 	fmt.Printf("  baseline:    %.2f\n", b.Latency.P95Ms)
 	fmt.Printf("  distributed: %.2f  (delta %+.2f ms)\n\n", d.Latency.P95Ms, d.Latency.P95Ms-b.Latency.P95Ms)
 
-	fmt.Println("classification equivalence (same detector+threshold should match exactly):")
+	if b.FailedRequests > 0 || d.FailedRequests > 0 {
+		fmt.Printf("failed requests (excluded from classification below):\n")
+		fmt.Printf("  baseline:    %d / %d\n", b.FailedRequests, b.TotalRequests)
+		fmt.Printf("  distributed: %d / %d\n\n", d.FailedRequests, d.TotalRequests)
+		if b.FailedRequests != d.FailedRequests {
+			fmt.Println("  note: unequal failure counts mean the two runs classified a different")
+			fmt.Println("  effective sample set — treat the classification comparison below as")
+			fmt.Println("  indicative, not a clean apples-to-apples equivalence check.")
+		}
+	}
+
+	fmt.Println("classification equivalence (same detector+threshold on the same inputs should match exactly):")
 	bc, dc := b.Classification.Counts, d.Classification.Counts
-	fmt.Printf("  baseline:    TP=%d FP=%d TN=%d FN=%d\n", bc.TP, bc.FP, bc.TN, bc.FN)
-	fmt.Printf("  distributed: TP=%d FP=%d TN=%d FN=%d\n", dc.TP, dc.FP, dc.TN, dc.FN)
+	fmt.Printf("  baseline:    TP=%d FP=%d TN=%d FN=%d  (n=%d)\n", bc.TP, bc.FP, bc.TN, bc.FN, b.Classification.Samples)
+	fmt.Printf("  distributed: TP=%d FP=%d TN=%d FN=%d  (n=%d)\n", dc.TP, dc.FP, dc.TN, dc.FN, d.Classification.Samples)
 	if bc.TP != dc.TP || bc.FP != dc.FP || bc.TN != dc.TN || bc.FN != dc.FN {
 		fmt.Println("  MISMATCH — distributed decisions differ from baseline on the same inputs.")
-		fmt.Println("  Expected if datasets/thresholds differ between runs; otherwise this points")
-		fmt.Println("  at a bug in aggregation/dispatch rather than a performance trade-off.")
+		if b.FailedRequests > 0 || d.FailedRequests > 0 {
+			fmt.Println("  Likely explained by the failed-request counts above, not a real accuracy")
+			fmt.Println("  difference — re-run with a longer --http-timeout-seconds and check again.")
+		} else {
+			fmt.Println("  Expected if datasets/thresholds differ between runs; otherwise this points")
+			fmt.Println("  at a bug in aggregation/dispatch rather than a performance trade-off.")
+		}
 	} else {
 		fmt.Println("  match — distributing the workload did not change any decision.")
 	}

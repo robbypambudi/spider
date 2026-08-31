@@ -46,6 +46,9 @@ export interface DetectorView {
   score: number;
   is_injection: boolean;
   latency_ms?: number;
+  snippet?: string;
+  chunk_text?: string;
+  chunk_index?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -96,6 +99,10 @@ export interface ScanDetail extends ScanListItem {
     is_injection: boolean;
     latency_ms: number;
     threshold?: number;
+    snippet?: string;
+    chunk_text?: string;
+    chunk_index?: number;
+    metadata?: Record<string, unknown>;
   }>;
 }
 

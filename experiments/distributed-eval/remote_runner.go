@@ -27,9 +27,10 @@ type remoteNodeState struct {
 	jobs     chan job
 	inflight int64
 
-	mu       sync.Mutex
-	requests int
-	busyMs   float64
+	mu             sync.Mutex
+	requests       int
+	failedRequests int
+	busyMs         float64
 }
 
 type remoteDetectResponse struct {
@@ -67,7 +68,17 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 		cfg.Repeat = 1
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	timeout := time.Duration(cfg.HTTPTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		// Flan-T5 inference under a constrained container (e.g. 1-2 CPUs) can
+		// legitimately take several seconds per request, more under
+		// concurrent load. A short timeout doesn't fail loudly — it silently
+		// turns slow-but-correct requests into "failed", which used to get
+		// mis-scored as 0 (see filterFailed) and corrupted TPR/FPR. Default
+		// generous; pass --http-timeout-seconds to tighten it deliberately.
+		timeout = 60 * time.Second
+	}
+	client := &http.Client{Timeout: timeout}
 	nodes := make([]*remoteNodeState, len(endpoints))
 	for i, ep := range endpoints {
 		if err := pingHealth(client, ep); err != nil {
@@ -80,6 +91,7 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 	labels := make([]bool, total)
 	scores := make([]float64, total)
 	latencies := make([]float64, total)
+	failed := make([]bool, total)
 
 	var wg sync.WaitGroup
 	for _, n := range nodes {
@@ -89,20 +101,29 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 				defer wg.Done()
 				for j := range n.jobs {
 					elapsed, resp, err := detectRemote(n.client, n.endpoint, j.text)
-					labels[j.idx] = j.label
-					if err != nil {
-						// Network/HTTP failure counts as score 0 (ALLOW) rather than
-						// aborting the whole run — this is a benchmark, not production;
-						// a real failure shows up as reduced throughput / a bad TPR.
-						scores[j.idx] = 0
-					} else {
+					latencies[j.idx] = elapsed
+
+					// A failure here is a network/HTTP error, a timeout, OR the
+					// pipeline itself reporting Decision=="ERROR" (e.g. detector-node's
+					// own call to prompt-shield failed). None of these produced a
+					// real detection result, so they must not enter classification
+					// as an implicit "score 0 / not injection" — that previously
+					// inflated FN and deflated TPR/AUC whenever timeouts clustered
+					// under load (see README "Docker-based evaluation" for the
+					// incident this fixed).
+					isFailed := err != nil || resp.Decision == "ERROR"
+					failed[j.idx] = isFailed
+					if !isFailed {
+						labels[j.idx] = j.label
 						scores[j.idx] = resp.Score
 					}
-					latencies[j.idx] = elapsed
 
 					n.mu.Lock()
 					n.requests++
 					n.busyMs += elapsed
+					if isFailed {
+						n.failedRequests++
+					}
 					n.mu.Unlock()
 					atomic.AddInt64(&n.inflight, -1)
 				}
@@ -133,6 +154,8 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 		strategy = ""
 	}
 
+	okLabels, okScores, failedCount := filterFailed(labels, scores, failed)
+
 	result := &BenchResult{
 		Mode:                 mode,
 		Timestamp:            time.Now().UTC(),
@@ -149,10 +172,11 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 		DatasetSize:          len(samples),
 		Repeat:               cfg.Repeat,
 		TotalRequests:        total,
+		FailedRequests:       failedCount,
 		WallClockMs:          float64(wallClock.Microseconds()) / 1000.0,
 		ThroughputRPS:        float64(total) / wallClock.Seconds(),
 		Latency:              computeLatencyStats(latencies),
-		Classification:       evaluation.EvaluateScores(labels, scores, cfg.Threshold, cfg.TargetFPRs),
+		Classification:       evaluation.EvaluateScores(okLabels, okScores, cfg.Threshold, cfg.TargetFPRs),
 	}
 
 	breakdown := make([]NodeBreakdown, len(nodes))
@@ -160,7 +184,7 @@ func runRemoteBenchmark(cfg BenchConfig, endpoints []string, samples []Sample) (
 	busyTimes := make([]float64, len(nodes))
 	for i, n := range nodes {
 		n.mu.Lock()
-		breakdown[i] = NodeBreakdown{NodeID: n.id, Endpoint: n.endpoint, Requests: n.requests, BusyMs: n.busyMs}
+		breakdown[i] = NodeBreakdown{NodeID: n.id, Endpoint: n.endpoint, Requests: n.requests, Failed: n.failedRequests, BusyMs: n.busyMs}
 		reqCounts[i] = float64(n.requests)
 		busyTimes[i] = n.busyMs
 		n.mu.Unlock()

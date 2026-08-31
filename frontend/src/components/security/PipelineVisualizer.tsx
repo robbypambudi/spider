@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { ScanResponse } from "@/types/api";
 import {
   ArrowRight,
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Cpu,
   Layers,
+  Quote,
   Scale,
   Shield,
   ShieldAlert,
@@ -18,8 +22,12 @@ interface PipelineVisualizerProps {
 }
 
 export function PipelineVisualizer({ scan, promptText }: PipelineVisualizerProps) {
+  const [showAllChunks, setShowAllChunks] = useState(false);
   const isBlock = scan.decision === "BLOCK";
   const threshold = scan.threshold ?? 0.5;
+
+  const detectors = scan.detectors ?? [];
+  const flaggedChunks = detectors.filter((d) => d.is_injection || d.score >= threshold);
 
   const steps = [
     {
@@ -42,7 +50,7 @@ export function PipelineVisualizer({ scan, promptText }: PipelineVisualizerProps
       step: 3,
       title: "ML / Rule Detector",
       icon: <Cpu className="h-4 w-4 text-purple-500" />,
-      detail: scan.detectors?.[0]?.detector ?? (scan.model || "prompt-shield"),
+      detail: detectors?.[0]?.detector ?? (scan.model || "prompt-shield"),
       desc: `${scan.latency_ms.toFixed(1)}ms latency`,
       status: "COMPLETED",
     },
@@ -64,8 +72,11 @@ export function PipelineVisualizer({ scan, promptText }: PipelineVisualizerProps
     },
   ];
 
+  const displayChunks = showAllChunks ? detectors : flaggedChunks.length > 0 ? flaggedChunks : detectors.slice(0, 3);
+
   return (
     <div className="space-y-4 rounded-xl border border-line bg-white p-5 shadow-card">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle pb-3">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-accent" />
@@ -134,6 +145,106 @@ export function PipelineVisualizer({ scan, promptText }: PipelineVisualizerProps
           <div className="font-bold text-sm">{scan.latency_ms.toFixed(2)} ms</div>
         </div>
       </div>
+
+      {/* Extracted Chunk Snippets & Dangerous Sentences */}
+      {detectors.length > 0 && (
+        <div className="space-y-3 border-t border-line-subtle pt-3 font-sans">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Quote className="h-4 w-4 text-accent" />
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                Evaluated Chunk Snippets & Threat Attribution
+              </h4>
+              {flaggedChunks.length > 0 && (
+                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">
+                  {flaggedChunks.length} Threat Chunk(s)
+                </span>
+              )}
+            </div>
+
+            {detectors.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllChunks(!showAllChunks)}
+                className="flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+              >
+                <span>{showAllChunks ? "Collapse" : `Show All ${detectors.length} Chunks`}</span>
+                {showAllChunks ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {displayChunks.map((chunk, cIdx) => {
+              const isFlagged = chunk.is_injection || chunk.score >= threshold;
+              const snippet =
+                chunk.snippet ||
+                chunk.chunk_text ||
+                (chunk.metadata?.snippet as string) ||
+                (chunk.metadata?.chunk_text as string) ||
+                (promptText && promptText.length <= 300 ? promptText : "");
+              const matchedPatterns = (chunk.metadata?.matched_patterns as string[]) || [];
+
+              return (
+                <div
+                  key={cIdx}
+                  className={`rounded-lg border p-3 text-xs transition space-y-2 ${
+                    isFlagged
+                      ? "border-rose-200 bg-rose-50/50 ring-1 ring-rose-200/50"
+                      : "border-line-subtle bg-slate-50/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-mono">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${
+                          isFlagged ? "bg-rose-600 text-white" : "bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {chunk.chunk_index !== undefined ? chunk.chunk_index + 1 : cIdx + 1}
+                      </span>
+                      <span className="font-semibold text-slate-800">{chunk.detector}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">Score:</span>
+                      <span
+                        className={`font-bold ${
+                          chunk.score >= 0.75
+                            ? "text-rose-600"
+                            : chunk.score >= threshold
+                            ? "text-amber-600"
+                            : "text-emerald-600"
+                        }`}
+                      >
+                        {chunk.score.toFixed(3)}
+                      </span>
+                      <Badge value={isFlagged ? "BLOCK" : "ALLOW"} />
+                    </div>
+                  </div>
+
+                  {matchedPatterns.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 font-mono text-[10px]">
+                      <span className="font-semibold text-rose-700">Matched Pattern:</span>
+                      {matchedPatterns.map((pat, pi) => (
+                        <span key={pi} className="rounded bg-rose-100 px-1.5 py-0.5 font-bold text-rose-800">
+                          {pat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {snippet && (
+                    <div className="rounded bg-white p-2.5 border border-slate-200/80 font-mono text-[11px] text-slate-800 leading-relaxed break-words whitespace-pre-wrap">
+                      "{snippet}"
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

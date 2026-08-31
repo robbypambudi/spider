@@ -32,6 +32,11 @@ type BenchConfig struct {
 	ConcurrencyPerNode int
 	Repeat             int
 	TargetFPRs         []float64
+	// HTTPTimeoutSeconds bounds each remote /detect call (remote_runner.go
+	// only; ignored here). Flan-T5 inference under CPU/memory limits can take
+	// many seconds per request, so this needs to be generous, not the naive
+	// per-HTTP-call default.
+	HTTPTimeoutSeconds int
 }
 
 type nodeState struct {
@@ -40,9 +45,10 @@ type nodeState struct {
 	jobs     chan job
 	inflight int64 // atomic; queued + in-progress, used by the least-loaded strategy
 
-	mu       sync.Mutex
-	requests int
-	busyMs   float64
+	mu             sync.Mutex
+	requests       int
+	failedRequests int
+	busyMs         float64
 }
 
 type job struct {
@@ -55,6 +61,7 @@ type NodeBreakdown struct {
 	NodeID   int     `json:"node_id"`
 	Endpoint string  `json:"endpoint,omitempty"` // set in remote-http mode (see remote_runner.go)
 	Requests int     `json:"requests"`
+	Failed   int     `json:"failed"` // errored/timed-out (remote) or Decision==ERROR (in-process); excluded from Classification
 	BusyMs   float64 `json:"busy_ms"`
 }
 
@@ -85,9 +92,16 @@ type BenchResult struct {
 
 	Classification apis.EvaluationReport `json:"classification"`
 
-	NodeBreakdown       []NodeBreakdown `json:"node_breakdown,omitempty"`
-	FairnessByRequests  float64         `json:"fairness_by_requests,omitempty"`
-	FairnessByBusyTime  float64         `json:"fairness_by_busy_time,omitempty"`
+	NodeBreakdown      []NodeBreakdown `json:"node_breakdown,omitempty"`
+	FairnessByRequests float64         `json:"fairness_by_requests,omitempty"`
+	FairnessByBusyTime float64         `json:"fairness_by_busy_time,omitempty"`
+
+	// FailedRequests is the number of requests excluded from Classification
+	// because they errored/timed out (remote mode) or came back with
+	// Decision=="ERROR" (in-process pipeline panic/detector failure). A
+	// nonzero value here means Classification.samples < TotalRequests —
+	// check this before trusting TPR/FPR/AUC.
+	FailedRequests int `json:"failed_requests"`
 }
 
 func selectNode(nodes []*nodeState, strategy string, idx int) *nodeState {
@@ -142,6 +156,7 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 	labels := make([]bool, total)
 	scores := make([]float64, total)
 	latencies := make([]float64, total)
+	failed := make([]bool, total)
 
 	var wg sync.WaitGroup
 	for _, n := range nodes {
@@ -157,13 +172,20 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 					})
 					elapsed := float64(time.Since(reqStart).Microseconds()) / 1000.0
 
-					labels[j.idx] = j.label
-					scores[j.idx] = res.Score
 					latencies[j.idx] = elapsed
+					isFailed := res.Decision == apis.DecisionError
+					failed[j.idx] = isFailed
+					if !isFailed {
+						labels[j.idx] = j.label
+						scores[j.idx] = res.Score
+					}
 
 					n.mu.Lock()
 					n.requests++
 					n.busyMs += elapsed
+					if isFailed {
+						n.failedRequests++
+					}
 					n.mu.Unlock()
 					atomic.AddInt64(&n.inflight, -1)
 				}
@@ -194,6 +216,8 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 		strategy = ""
 	}
 
+	okLabels, okScores, failedCount := filterFailed(labels, scores, failed)
+
 	result := &BenchResult{
 		Mode:                 mode,
 		Timestamp:            time.Now().UTC(),
@@ -210,10 +234,11 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 		DatasetSize:          len(samples),
 		Repeat:               cfg.Repeat,
 		TotalRequests:        total,
+		FailedRequests:       failedCount,
 		WallClockMs:          float64(wallClock.Microseconds()) / 1000.0,
 		ThroughputRPS:        float64(total) / wallClock.Seconds(),
 		Latency:              computeLatencyStats(latencies),
-		Classification:       evaluation.EvaluateScores(labels, scores, cfg.Threshold, cfg.TargetFPRs),
+		Classification:       evaluation.EvaluateScores(okLabels, okScores, cfg.Threshold, cfg.TargetFPRs),
 	}
 
 	if cfg.Nodes > 1 {
@@ -222,7 +247,7 @@ func runBenchmark(cfg BenchConfig, samples []Sample) (*BenchResult, error) {
 		busyTimes := make([]float64, len(nodes))
 		for i, n := range nodes {
 			n.mu.Lock()
-			breakdown[i] = NodeBreakdown{NodeID: n.id, Requests: n.requests, BusyMs: n.busyMs}
+			breakdown[i] = NodeBreakdown{NodeID: n.id, Requests: n.requests, Failed: n.failedRequests, BusyMs: n.busyMs}
 			reqCounts[i] = float64(n.requests)
 			busyTimes[i] = n.busyMs
 			n.mu.Unlock()

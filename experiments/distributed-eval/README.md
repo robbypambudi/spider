@@ -107,8 +107,22 @@ Angka TPR@FPR bandingkan dengan tabel paper (FLAN-T5-small: AUC ~0.942, TPR@FPR 
 | `--repeat` | `1` | ulangi dataset untuk load test |
 | `--node-endpoints` | *(kosong)* | comma-separated `http://host:port` — kalau diisi, request di-dispatch lewat HTTP asli ke instance `detector-node` sungguhan (lihat bagian Docker di bawah), **bukan** simulasi in-process. `--nodes` diabaikan; jumlah node = jumlah endpoint. |
 | `--limit` | `0` (semua) | pakai N baris pertama saja dari `--dataset` — buat memotong dataset **asli** yang kebesaran, bukan pengganti data asli |
+| `--http-timeout-seconds` | `60` | timeout per request `--node-endpoints`. Terlalu pendek bikin request lambat-tapi-benar dihitung "gagal" — lihat catatan bug di bawah |
 
 `rule-based` dan `fixed` chunker **sengaja ditolak** — gunakan pipeline ML yang sama dengan lab.
+
+## Bug yang sudah diperbaiki: request timeout mencemari angka klasifikasi
+
+**Kejadian**: run pertama `docker_baseline.json` vs `docker_distributed.json` (lihat `results/`) menunjukkan AUC turun dari 0,945 → 0,885 dan TPR 83,4% → 77,6% di sisi distributed — kelihatan seperti "distribusi bikin deteksi lebih buruk". **Itu bukan temuan asli** — itu bug di harness ini.
+
+**Akar masalah**: `remote_runner.go` sebelumnya pakai timeout HTTP hardcode 15 detik, dan request yang gagal/timeout otomatis diberi `score=0` (dianggap "diprediksi ALLOW") alih-alih dikeluarkan dari perhitungan. `max_ms` di kedua file persis mentok di ~15000ms — bukti langsung timeout inilah yang kepotong. Saya buktikan lewat hitung selisih TP/FP/TN/FN antar dua run: **persis 35 sampel** yang tadinya TP di baseline jadi FN di distributed, dan **persis 10 sampel** yang tadinya FP jadi TN — pola yang cuma mungkin terjadi kalau sejumlah skor "dipaksa" jadi 0 oleh timeout, bukan oleh model.
+
+**Perbaikan**:
+- Timeout sekarang **configurable** (`--http-timeout-seconds`, default dinaikkan jadi 60 detik — Flan-T5 di container ber-CPU terbatas bisa butuh waktu lebih dari 15 detik, apalagi di bawah beban konkuren).
+- Request yang gagal/timeout (HTTP error, atau respons dengan `decision:"ERROR"`) sekarang **dikeluarkan** dari `classification`, dihitung terpisah sebagai `failed_requests` (total dan per-node). `spider-bench bench` akan mencetak peringatan mencolok kalau `failed_requests > 0`.
+- Perbaikan yang sama juga diterapkan ke mode in-process (`runner.go`): request dengan `Decision=="ERROR"` juga dikeluarkan, bukan cuma di mode Docker/HTTP.
+
+**Penting**: `results/docker_baseline.json` dan `results/docker_distributed.json` yang sudah ada **direkam sebelum perbaikan ini** — field `failed_requests` di file lama itu tidak ada (bukan nol yang valid, cuma tidak pernah dicatat). Angka AUC/TPR di kedua file itu **tidak bisa dipercaya** dan tidak bisa diperbaiki secara retroaktif — harus **dijalankan ulang** dengan versi kode yang sudah diperbaiki ini untuk dapat angka yang valid.
 
 ## Simulasi in-process vs Docker (CPU/memory terkontrol nyata)
 

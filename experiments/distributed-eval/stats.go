@@ -52,6 +52,27 @@ func computeLatencyStats(samples []float64) LatencyStats {
 	}
 }
 
+// filterFailed drops entries marked failed[i] from labels/scores before they
+// reach classification metrics. A failed request has no real detection
+// result (network error, timeout, or pipeline Decision==ERROR) — scoring it
+// as 0 would silently count it as a confident "not injection" prediction
+// and distort TPR/FPR/AUC. Returns the filtered slices and how many were
+// dropped.
+func filterFailed(labels []bool, scores []float64, failed []bool) ([]bool, []float64, int) {
+	outLabels := make([]bool, 0, len(labels))
+	outScores := make([]float64, 0, len(scores))
+	dropped := 0
+	for i, f := range failed {
+		if f {
+			dropped++
+			continue
+		}
+		outLabels = append(outLabels, labels[i])
+		outScores = append(outScores, scores[i])
+	}
+	return outLabels, outScores, dropped
+}
+
 // jainsFairnessIndex computes Jain's Fairness Index over a set of per-node
 // load values (e.g. request counts or busy time). Returns 1.0 for perfectly
 // even distribution, down toward 1/n for maximally skewed distribution.

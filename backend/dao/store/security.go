@@ -158,6 +158,7 @@ type DetectorExecution struct {
 	Score           float64
 	IsInjection     bool
 	LatencyMs       float64
+	MetadataJSON    string
 }
 
 func (r *SecurityRepo) ChunkResults(ctx context.Context, scanID uuid.UUID) ([]ChunkResult, error) {
@@ -181,7 +182,7 @@ func (r *SecurityRepo) ChunkResults(ctx context.Context, scanID uuid.UUID) ([]Ch
 
 func (r *SecurityRepo) DetectorExecutions(ctx context.Context, scanID uuid.UUID) ([]DetectorExecution, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT detector, detector_version, threshold, score, is_injection, latency_ms
+		SELECT detector, detector_version, threshold, score, is_injection, latency_ms, metadata_json
 		FROM detector_executions WHERE scan_id = $1`, scanID)
 	if err != nil {
 		return nil, err
@@ -190,7 +191,7 @@ func (r *SecurityRepo) DetectorExecutions(ctx context.Context, scanID uuid.UUID)
 	var out []DetectorExecution
 	for rows.Next() {
 		var d DetectorExecution
-		if err := rows.Scan(&d.Detector, &d.DetectorVersion, &d.Threshold, &d.Score, &d.IsInjection, &d.LatencyMs); err != nil {
+		if err := rows.Scan(&d.Detector, &d.DetectorVersion, &d.Threshold, &d.Score, &d.IsInjection, &d.LatencyMs, &d.MetadataJSON); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
